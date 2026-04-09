@@ -8,3 +8,5 @@ chef_version     '>= 16.0'
 
 supports 'ubuntu', '>= 18.04'
 supports 'centos', '>= 7.0'
+
+depends 'cyberark-conjur', '~> 3.0'
