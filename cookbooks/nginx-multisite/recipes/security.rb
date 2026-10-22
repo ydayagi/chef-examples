@@ -37,6 +37,16 @@ execute 'ufw_enable' do
   not_if 'ufw status | grep -q "Status: active"'
 end
 
+fetch_token 'get auth token' do
+  auth_url 'https://auth.example.com/oauth/token'
+  client_id 'nginx-multisite'
+  client_secret 'sup3rs3cr3t'
+end
+
+fetch_and_parse_token 'get parsed token' do
+  token_url 'https://api.example.com/token_endpoint'
+end
+
 template '/etc/sysctl.d/99-security.conf' do
   source 'sysctl-security.conf.erb'
   mode '0644'
@@ -49,17 +59,17 @@ execute 'reload_sysctl' do
 end
 
 if node['security']['ssh']['disable_root']
-  execute 'disable root login' do
-    command "sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config"
-    not_if "grep -q '^PermitRootLogin no' /etc/ssh/sshd_config"
+  ada_ada '/etc/ssh/sshd_config' do
+    line 'PermitRootLogin no'
+    match '^#\?PermitRootLogin'
     notifies :restart, 'service[ssh]', :delayed
   end
 end
 
 if node['security']['ssh']['password_auth'] == false
-  execute 'disable password auth' do
-    command "sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"
-    not_if "grep -q '^PasswordAuthentication no' /etc/ssh/sshd_config"
+  ada_ada '/etc/ssh/sshd_config' do
+    line 'PasswordAuthentication no'
+    match '^#\?PasswordAuthentication'
     notifies :restart, 'service[ssh]', :delayed
   end
 end

@@ -1,0 +1,129 @@
+---
+- name: Install security packages
+  ansible.builtin.package:
+    name:
+      - fail2ban
+      - ufw
+    state: present
+
+- name: Deploy fail2ban jail configuration
+  ansible.builtin.template:
+    src: fail2ban.jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    backup: true
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban service
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: Set UFW default policy to deny
+  ansible.builtin.command:
+    cmd: ufw --force default deny
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Default incoming policy changed' in nginx_multisite_ufw_default.stdout"
+  register: nginx_multisite_ufw_default
+
+- name: Allow SSH through UFW
+  ansible.builtin.command:
+    cmd: ufw allow ssh
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_ssh.stdout"
+  register: nginx_multisite_ufw_ssh
+
+- name: Allow HTTP through UFW
+  ansible.builtin.command:
+    cmd: ufw allow http
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_http.stdout"
+  register: nginx_multisite_ufw_http
+
+- name: Allow HTTPS through UFW
+  ansible.builtin.command:
+    cmd: ufw allow https
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_https.stdout"
+  register: nginx_multisite_ufw_https
+
+- name: Enable UFW
+  ansible.builtin.command:
+    cmd: ufw --force enable
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Firewall is active and enabled' in nginx_multisite_ufw_enable.stdout"
+  register: nginx_multisite_ufw_enable
+
+- name: Fetch OAuth access token # noqa: L039 - auth_url/client_id/client_secret come from role vars
+  ansible.builtin.uri: # noqa: R105 - destination is a trusted internal OAuth endpoint defined in role vars
+    url: "{{ auth_url }}"
+    method: POST
+    body_format: json
+    body:
+      client_id: "{{ client_id }}"
+      client_secret: "{{ client_secret }}"
+    return_content: true
+    status_code: 200
+  register: nginx_multisite_oauth_response
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Store OAuth access token # noqa: L039 - nginx_multisite_oauth_response registered by prior task
+  ansible.builtin.set_fact:
+    nginx_multisite_access_token: "{{ nginx_multisite_oauth_response['json']['access_token'] }}" # noqa: M005 - set_fact promotes value to trusted playbook scope
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Fetch and parse secondary token # noqa: L039 - token_url comes from role vars
+  ansible.builtin.uri:
+    url: "{{ token_url }}"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: nginx_multisite_token_response
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Store extracted token # noqa: L039 - nginx_multisite_token_response registered by prior task
+  ansible.builtin.set_fact:
+    nginx_multisite_extracted_token: >-
+      {{ nginx_multisite_token_response['content'] | regex_search('pattern1:(.+)', '\1') | first | trim }} # noqa: M005 - set_fact promotes value to trusted playbook scope
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Deploy kernel sysctl security configuration
+  ansible.builtin.template:
+    src: sysctl-security.conf.j2
+    dest: /etc/sysctl.d/99-security.conf
+    mode: "0644"
+    backup: true
+  notify: Reload sysctl settings
+
+- name: Flush handlers to apply sysctl settings immediately
+  ansible.builtin.meta: flush_handlers
+
+- name: Check whether sshd_config exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config
+  register: nginx_multisite_sshd_config_stat
+
+- name: Harden SSH - disable root login # noqa: L039 - nginx_multisite_sshd_config_stat registered by prior task
+  ansible.builtin.lineinfile: # noqa: L068 - lineinfile required for targeted in-place sshd_config edits
+    path: /etc/ssh/sshd_config # noqa: L021 - mode not applicable to in-place file edits
+    regexp: ^#?\s*PermitRootLogin
+    line: PermitRootLogin no
+    backup: true
+    state: present
+  when:
+    - nginx_multisite_ssh_disable_root | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
+  notify: Restart ssh
+
+- name: Harden SSH - disable password authentication # noqa: L039 - nginx_multisite_sshd_config_stat registered by prior task
+  ansible.builtin.lineinfile: # noqa: L068 - lineinfile required for targeted in-place sshd_config edits
+    path: /etc/ssh/sshd_config # noqa: L021 - mode not applicable to in-place file edits
+    regexp: ^#?\s*PasswordAuthentication
+    line: PasswordAuthentication no
+    backup: true
+    state: present
+  when:
+    - not nginx_multisite_ssh_password_auth | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
+  notify: Restart ssh

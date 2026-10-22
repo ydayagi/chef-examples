@@ -1,0 +1,45 @@
+---
+- name: Install SSL packages
+  ansible.builtin.package:
+    name:
+      - openssl
+      - ca-certificates
+    state: present
+
+- name: Ensure ssl-cert group exists
+  ansible.builtin.group:
+    name: ssl-cert
+    state: present
+
+- name: Ensure SSL certificate directory exists # noqa: R114 - path from role defaults, not user input
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_certificate_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure SSL private key directory exists # noqa: R114 - path from role defaults, not user input
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_private_key_path }}"
+    state: directory
+    owner: root
+    group: ssl-cert
+    mode: "0710"
+
+- name: Generate self-signed SSL certificates for each site # noqa: R101 L013 - command built from role defaults only; creates: makes this idempotent
+  ansible.builtin.shell: # noqa: L039 - ssl_passphrase is a role var defined in defaults
+    cmd: |
+      openssl req -x509 -days {{ nginx_multisite_ssl_cert_days }} -newkey rsa:2048 \
+        -keyout {{ nginx_multisite_ssl_private_key_path }}/{{ item_ssl_site['key'] }}.key \
+        -out {{ nginx_multisite_ssl_certificate_path }}/{{ item_ssl_site['key'] }}.crt \
+        -passout pass:{{ ssl_passphrase }} \
+        -subj "/C={{ nginx_multisite_ssl_cert_country }}/ST={{ nginx_multisite_ssl_cert_state }}/L={{ nginx_multisite_ssl_cert_locality }}/O={{ nginx_multisite_ssl_cert_org }}/OU={{ nginx_multisite_ssl_cert_ou }}/CN={{ item_ssl_site['key'] }}/emailAddress={{ nginx_multisite_ssl_cert_email }}"
+      chmod 640 {{ nginx_multisite_ssl_private_key_path }}/{{ item_ssl_site['key'] }}.key
+      chown root:ssl-cert {{ nginx_multisite_ssl_private_key_path }}/{{ item_ssl_site['key'] }}.key
+    creates: "{{ nginx_multisite_ssl_certificate_path }}/{{ item_ssl_site['key'] }}.crt"
+  loop: "{{ nginx_multisite_sites | dict2items | selectattr('value.ssl_enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: item_ssl_site
+  notify: Reload nginx
+  no_log: "{{ nginx_multisite_secure_logging }}"

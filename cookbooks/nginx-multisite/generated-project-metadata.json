@@ -1,0 +1,8 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": ".",
+    "description": "Installs and configures Nginx as a multi-site reverse proxy with SSL termination for multiple virtual hosts, and applies a full security baseline including fail2ban, UFW firewall rules, SSH hardening, and kernel sysctl tuning.",
+    "technology": "Chef"
+  }
+]

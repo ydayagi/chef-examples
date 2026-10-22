@@ -1,4 +1,4 @@
-provides :lineinfile
+provides :ada_ada
 
 property :file_path, String, name_property: true
 property :line, String, required: true
