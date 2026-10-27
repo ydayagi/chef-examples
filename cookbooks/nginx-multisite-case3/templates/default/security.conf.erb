@@ -1,0 +1,24 @@
+# Hide nginx version
+server_tokens off;
+
+# Rate limiting
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=api:10m rate=30r/m;
+
+# Prevent buffer overflow attacks
+client_body_buffer_size 1K;
+client_header_buffer_size 1k;
+client_max_body_size 1k;
+large_client_header_buffers 2 1k;
+
+# Timeout settings
+client_body_timeout 10;
+client_header_timeout 10;
+send_timeout 10;
+
+# SSL settings
+ssl_session_cache shared:SSL:10m;
+ssl_session_timeout 10m;
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+ssl_prefer_server_ciphers on;
