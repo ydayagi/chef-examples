@@ -1,0 +1,92 @@
+---
+- name: Install security packages
+  ansible.builtin.package:
+    name:
+      - fail2ban
+      - ufw
+    state: present
+
+- name: Deploy fail2ban jail configuration
+  ansible.builtin.template:
+    src: fail2ban.jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    backup: true
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban service
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+- name: Set UFW default policy to deny
+  ansible.builtin.command:
+    cmd: ufw --force default deny
+  changed_when: "'Default incoming policy changed' in nginx_multisite_ufw_default.stdout"
+  register: nginx_multisite_ufw_default
+
+- name: Allow SSH through UFW
+  ansible.builtin.command:
+    cmd: ufw allow ssh
+  changed_when: "'Rules updated' in nginx_multisite_ufw_ssh.stdout"
+  register: nginx_multisite_ufw_ssh
+
+- name: Allow HTTP through UFW
+  ansible.builtin.command:
+    cmd: ufw allow http
+  changed_when: "'Rules updated' in nginx_multisite_ufw_http.stdout"
+  register: nginx_multisite_ufw_http
+
+- name: Allow HTTPS through UFW
+  ansible.builtin.command:
+    cmd: ufw allow https
+  changed_when: "'Rules updated' in nginx_multisite_ufw_https.stdout"
+  register: nginx_multisite_ufw_https
+
+- name: Enable UFW firewall
+  ansible.builtin.command:
+    cmd: ufw --force enable
+  changed_when: "'Firewall is active and enabled' in nginx_multisite_ufw_enable.stdout"
+  register: nginx_multisite_ufw_enable
+
+- name: Deploy kernel hardening sysctl configuration
+  ansible.builtin.template:
+    src: sysctl-security.conf.j2
+    dest: /etc/sysctl.d/99-security.conf
+    mode: "0644"
+    backup: true
+  notify: Reload sysctl
+
+- name: Check if sshd_config exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config
+  register: nginx_multisite_sshd_config_stat
+
+- name: Harden SSH - disable root login
+  ansible.builtin.lineinfile: # noqa: L068 - lineinfile is appropriate for targeted sshd_config line edits; a full template would overwrite site-local customisations
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PermitRootLogin
+    line: PermitRootLogin no
+    state: present
+    backup: true
+    create: false
+    mode: "0600"
+  when:
+    - nginx_multisite_ssh_disable_root | bool
+    - nginx_multisite_sshd_config_stat.stat.exists # noqa: L039 - registered by the preceding stat task
+  notify: Restart ssh
+
+- name: Harden SSH - disable password authentication
+  ansible.builtin.lineinfile: # noqa: L068 - lineinfile is appropriate for targeted sshd_config line edits; a full template would overwrite site-local customisations
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PasswordAuthentication
+    line: PasswordAuthentication no
+    state: present
+    backup: true
+    create: false
+    mode: "0600"
+  when:
+    - not nginx_multisite_ssh_password_auth | bool
+    - nginx_multisite_sshd_config_stat.stat.exists # noqa: L039 - registered by the preceding stat task
+  notify: Restart ssh

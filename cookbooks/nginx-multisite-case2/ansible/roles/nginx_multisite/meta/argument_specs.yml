@@ -1,0 +1,89 @@
+---
+argument_specs:
+  main:
+    short_description: Install and configure nginx as a multi-site SSL web server with security hardening
+    description:
+      - Installs nginx and configures multiple SSL-enabled virtual hosts.
+      - Hardens the host with fail2ban intrusion prevention, UFW firewall rules, and kernel sysctl security parameters.
+      - Generates self-signed TLS certificates for each virtual host using a passphrase from AAP credentials.
+      - Locks down SSH by disabling root login and password authentication.
+    options:
+      nginx_multisite_sites:
+        type: dict
+        required: false
+        default:
+          test.cluster.local:
+            document_root: /opt/server/test
+            ssl_enabled: true
+          ci.cluster.local:
+            document_root: /opt/server/ci
+            ssl_enabled: true
+          status.cluster.local:
+            document_root: /opt/server/status
+            ssl_enabled: true
+        description: >-
+          Dictionary of nginx virtual hosts to configure. Each key is the server_name (FQDN)
+          and the value is a dict with document_root (str) and ssl_enabled (bool).
+      nginx_multisite_ssl_certificate_path:
+        type: str
+        required: false
+        default: /etc/ssl/certs
+        description: Directory path where SSL certificates (.crt files) are stored.
+      nginx_multisite_ssl_private_key_path:
+        type: str
+        required: false
+        default: /etc/ssl/private
+        description: Directory path where SSL private keys (.key files) are stored.
+      nginx_multisite_fail2ban_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to install and configure fail2ban intrusion prevention.
+      nginx_multisite_ufw_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to configure UFW firewall rules (deny default, allow SSH/HTTP/HTTPS).
+      nginx_multisite_ssh_disable_root:
+        type: bool
+        required: false
+        default: true
+        description: Whether to set PermitRootLogin no in /etc/ssh/sshd_config.
+      nginx_multisite_ssh_password_auth:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          Whether to allow SSH password authentication. When false (default),
+          PasswordAuthentication is set to no in /etc/ssh/sshd_config.
+      nginx_multisite_secure_logging:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Controls no_log on tasks that handle the ssl_passphrase secret.
+          Set to false only for debugging — this will expose the passphrase in job output.
+      ssl_passphrase:
+        type: str
+        required: true
+        description: >-
+          SSL certificate passphrase used as -passout when generating self-signed TLS certificates.
+          Injected at runtime by the AAP CyberArk Conjur credential type. Secret value — never log.
+      conjur_appliance_url:
+        type: str
+        required: true
+        description: >-
+          URL of the CyberArk Conjur appliance (e.g. https://conjur.example.com).
+          Injected at runtime by the AAP CyberArk Conjur credential type.
+      conjur_account:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur account name (e.g. myorg).
+          Injected at runtime by the AAP CyberArk Conjur credential type.
+      conjur_variable_path:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur variable path for the SSL passphrase (e.g. production/nginx/ssl_passphrase).
+          Injected at runtime by the AAP CyberArk Conjur credential type.

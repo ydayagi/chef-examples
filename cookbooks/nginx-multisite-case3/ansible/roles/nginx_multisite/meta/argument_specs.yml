@@ -1,0 +1,126 @@
+---
+argument_specs:
+  main:
+    short_description: Install and configure nginx as a multi-site web server with SSL and host security hardening
+    description:
+      - Installs and configures nginx to host multiple SSL-enabled virtual hosts.
+      - Configures fail2ban with nginx-aware jails for intrusion prevention.
+      - Configures UFW firewall with deny-by-default policy allowing SSH, HTTP, and HTTPS.
+      - Applies kernel-level sysctl security parameters.
+      - Hardens SSH configuration (no root login, no password authentication).
+      - Generates self-signed TLS certificates for each virtual host using an SSL passphrase injected by an AAP credential type.
+    options:
+      nginx_multisite_secure_logging:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Toggle to suppress secret values from Ansible task output.
+          Set to false only for debugging. Defaults to true to protect secrets.
+      nginx_multisite_sites:
+        type: dict
+        required: false
+        default:
+          test.cluster.local:
+            document_root: /opt/server/test
+            ssl_enabled: true
+          ci.cluster.local:
+            document_root: /opt/server/ci
+            ssl_enabled: true
+          status.cluster.local:
+            document_root: /opt/server/status
+            ssl_enabled: true
+        description: >-
+          Dictionary of nginx virtual hosts to configure. Each key is the server_name
+          (FQDN) and the value is a dict with document_root (str) and ssl_enabled (bool).
+      nginx_multisite_ssl_certificate_path:
+        type: str
+        required: false
+        default: /etc/ssl/certs
+        description: Directory path where SSL certificates (.crt files) are stored.
+      nginx_multisite_ssl_private_key_path:
+        type: str
+        required: false
+        default: /etc/ssl/private
+        description: Directory path where SSL private keys (.key files) are stored.
+      nginx_multisite_fail2ban_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to install and configure fail2ban intrusion prevention.
+      nginx_multisite_ufw_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to configure UFW firewall rules.
+      nginx_multisite_ssh_disable_root:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          When true, sets PermitRootLogin no in /etc/ssh/sshd_config
+          and restarts the SSH service.
+      nginx_multisite_ssh_password_auth:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          When false, sets PasswordAuthentication no in /etc/ssh/sshd_config
+          and restarts the SSH service.
+      ssl_passphrase:
+        type: str
+        required: true
+        description: >-
+          SSL certificate passphrase used with openssl req -passout when generating
+          self-signed certificates. Injected at runtime by the AAP credential type.
+          This is a secret value — tasks that use it set no_log.
+      token_url:
+        type: str
+        required: true
+        description: >-
+          URL of the OAuth token endpoint (e.g. https://auth.example.com/oauth/token).
+          Injected at runtime by the AAP credential type.
+      client_id:
+        type: str
+        required: true
+        description: >-
+          OAuth client ID used when fetching the access token.
+          Injected at runtime by the AAP credential type.
+      client_secret:
+        type: str
+        required: true
+        description: >-
+          OAuth client secret used when fetching the access token.
+          Injected at runtime by the AAP credential type. This is a secret value.
+      token_endpoint_url:
+        type: str
+        required: true
+        description: >-
+          URL of the token parse endpoint (e.g. https://api.example.com/token_endpoint).
+          Injected at runtime by the AAP credential type.
+      extracted_token:
+        type: str
+        required: true
+        description: >-
+          Token value extracted from the token_endpoint_url response body.
+          Injected at runtime by the AAP credential type. This is a secret value.
+      conjur_appliance_url:
+        type: str
+        required: true
+        description: >-
+          URL of the Conjur appliance used for secrets retrieval
+          (e.g. https://conjur.example.com). Injected at runtime by the AAP
+          credential type.
+      conjur_account:
+        type: str
+        required: true
+        description: >-
+          Conjur account name used when authenticating to the Conjur appliance.
+          Injected at runtime by the AAP credential type.
+      conjur_variable_path:
+        type: str
+        required: true
+        description: >-
+          Path to the Conjur variable that holds the secret to be retrieved
+          (e.g. secrets/nginx_multisite/ssl_passphrase). Injected at runtime
+          by the AAP credential type.

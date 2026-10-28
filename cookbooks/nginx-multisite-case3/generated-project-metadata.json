@@ -1,0 +1,8 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": ".",
+    "description": "Installs and configures Nginx with three SSL-enabled virtual hosts, deploys static site content, generates self-signed TLS certificates via OpenSSL with CyberArk Conjur secrets integration, and applies host-level security hardening including fail2ban, UFW, sysctl kernel parameters, and SSH hardening.",
+    "technology": "Chef"
+  }
+]

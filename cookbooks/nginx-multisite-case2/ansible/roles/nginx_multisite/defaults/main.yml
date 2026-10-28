@@ -1,0 +1,22 @@
+---
+# nginx sites configuration
+nginx_multisite_sites:
+  test.cluster.local:
+    document_root: /opt/server/test
+    ssl_enabled: true
+  ci.cluster.local:
+    document_root: /opt/server/ci
+    ssl_enabled: true
+  status.cluster.local:
+    document_root: /opt/server/status
+    ssl_enabled: true
+# SSL certificate paths
+nginx_multisite_ssl_certificate_path: /etc/ssl/certs
+nginx_multisite_ssl_private_key_path: /etc/ssl/private
+# Security settings
+nginx_multisite_fail2ban_enabled: true
+nginx_multisite_ufw_enabled: true
+nginx_multisite_ssh_disable_root: true
+nginx_multisite_ssh_password_auth: false
+# Secure logging toggle (set to false only for debugging)
+nginx_multisite_secure_logging: true

@@ -1,0 +1,462 @@
+---
+# ============================================================
+# Play 1: Services
+# ============================================================
+- name: Verify - Services
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert nginx service is active and enabled
+      ansible.builtin.assert:
+        that:
+          - "'nginx.service' in ansible_facts['services']"
+          - "ansible_facts['services']['nginx.service']['state'] == 'running'"
+          - "ansible_facts['services']['nginx.service']['status'] == 'enabled'"
+        fail_msg: "nginx service is not running or not enabled"
+
+    - name: Assert fail2ban service is active and enabled
+      ansible.builtin.assert:
+        that:
+          - "'fail2ban.service' in ansible_facts['services']"
+          - "ansible_facts['services']['fail2ban.service']['state'] == 'running'"
+          - "ansible_facts['services']['fail2ban.service']['status'] == 'enabled'"
+        fail_msg: "fail2ban service is not running or not enabled"
+
+    - name: Check nginx is listening on port 80
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 10
+        state: started
+
+    - name: Check nginx is listening on port 443
+      ansible.builtin.wait_for:
+        port: 443
+        host: 127.0.0.1
+        timeout: 10
+        state: started
+
+# ============================================================
+# Play 2: nginx configuration files
+# ============================================================
+- name: Verify - nginx configuration files
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat nginx configuration files
+      ansible.builtin.stat:
+        path: "{{ item_conf }}"  # noqa: R114 - fixed list of known nginx config paths, not user input
+      loop:
+        - /etc/nginx/nginx.conf
+        - /etc/nginx/conf.d/security.conf
+        - /etc/nginx/sites-available/test.cluster.local
+        - /etc/nginx/sites-available/ci.cluster.local
+        - /etc/nginx/sites-available/status.cluster.local
+      loop_control:
+        loop_var: item_conf
+      register: nginx_conf_stat_results
+
+    - name: Assert nginx configuration files exist and are non-empty
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['size'] > 0
+        fail_msg: "Expected nginx configuration file not found or empty"
+      loop: "{{ nginx_conf_stat_results['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat nginx sites-enabled symlinks
+      ansible.builtin.stat:
+        path: "{{ item_link }}"  # noqa: R114 - fixed list of known symlink paths, not user input
+      loop:
+        - /etc/nginx/sites-enabled/test.cluster.local
+        - /etc/nginx/sites-enabled/ci.cluster.local
+        - /etc/nginx/sites-enabled/status.cluster.local
+      loop_control:
+        loop_var: item_link
+      register: nginx_link_stat_results
+
+    - name: Assert sites-enabled symlinks exist and are symlinks
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['islnk']
+        fail_msg: "Expected sites-enabled symlink not found or not a symlink"
+      loop: "{{ nginx_link_stat_results['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat nginx default site (must NOT exist)
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/default
+      register: nginx_default_stat
+
+    - name: Assert nginx default site has been removed
+      ansible.builtin.assert:
+        that:
+          - not nginx_default_stat['stat']['exists']
+        fail_msg: "nginx default site still present in sites-enabled — it should have been removed"
+
+    - name: Slurp nginx.conf to verify key directives
+      ansible.builtin.slurp:
+        src: /etc/nginx/nginx.conf
+      register: nginx_conf_content
+
+    - name: Assert nginx.conf contains expected directives
+      ansible.builtin.assert:
+        that:
+          - "'worker_processes' in (nginx_conf_content['content'] | b64decode)"
+          - "'worker_connections' in (nginx_conf_content['content'] | b64decode)"
+          - "'keepalive_timeout' in (nginx_conf_content['content'] | b64decode)"
+        fail_msg: "nginx.conf is missing expected directives"
+
+    - name: Slurp security.conf to verify key directives
+      ansible.builtin.slurp:
+        src: /etc/nginx/conf.d/security.conf
+      register: security_conf_content
+
+    - name: Assert security.conf contains expected directives
+      ansible.builtin.assert:
+        that:
+          - "'server_tokens' in (security_conf_content['content'] | b64decode)"
+          - "'limit_req_zone' in (security_conf_content['content'] | b64decode)"
+          - "'ssl_protocols' in (security_conf_content['content'] | b64decode)"
+        fail_msg: "security.conf is missing expected directives"
+
+# ============================================================
+# Play 3: Document roots and static files
+# ============================================================
+- name: Verify - Document roots and static files
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat site index.html files
+      ansible.builtin.stat:
+        path: "{{ item_html }}"  # noqa: R114 - fixed list of known document root paths, not user input
+      loop:
+        - /opt/server/test/index.html
+        - /opt/server/ci/index.html
+        - /opt/server/status/index.html
+      loop_control:
+        loop_var: item_html
+      register: html_stat_results
+
+    - name: Assert site index.html files exist with correct permissions
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['size'] > 0
+          - item_result['stat']['mode'] == '0644'
+          - item_result['stat']['pw_name'] == 'www-data'
+          - item_result['stat']['gr_name'] == 'www-data'
+        fail_msg: "Site index.html not found, empty, or has wrong permissions/ownership"
+      loop: "{{ html_stat_results['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat site document root directories
+      ansible.builtin.stat:
+        path: "{{ item_dir }}"  # noqa: R114 - fixed list of known document root directories, not user input
+      loop:
+        - /opt/server/test
+        - /opt/server/ci
+        - /opt/server/status
+      loop_control:
+        loop_var: item_dir
+      register: docroot_stat_results
+
+    - name: Assert document root directories exist with correct permissions
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isdir']
+          - item_result['stat']['mode'] == '0755'
+          - item_result['stat']['pw_name'] == 'www-data'
+          - item_result['stat']['gr_name'] == 'www-data'
+        fail_msg: "Document root directory not found or has wrong permissions/ownership"
+      loop: "{{ docroot_stat_results['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+# ============================================================
+# Play 4: SSL certificates and keys
+# ============================================================
+- name: Verify - SSL certificates and keys
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat SSL certificate files
+      ansible.builtin.stat:
+        path: "{{ item_cert }}"  # noqa: R114 - fixed list of known SSL cert paths, not user input
+      loop:
+        - /etc/ssl/certs/test.cluster.local.crt
+        - /etc/ssl/certs/ci.cluster.local.crt
+        - /etc/ssl/certs/status.cluster.local.crt
+      loop_control:
+        loop_var: item_cert
+      register: cert_stat_results
+
+    - name: Assert SSL certificate files exist and are non-empty
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['size'] > 0
+        fail_msg: "SSL certificate file not found or empty"
+      loop: "{{ cert_stat_results['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat SSL private key files
+      ansible.builtin.stat:
+        path: "{{ item_key }}"  # noqa: R114 - fixed list of known SSL key paths, not user input
+      loop:
+        - /etc/ssl/private/test.cluster.local.key
+        - /etc/ssl/private/ci.cluster.local.key
+        - /etc/ssl/private/status.cluster.local.key
+      loop_control:
+        loop_var: item_key
+      register: key_stat_results
+
+    - name: Assert SSL private key files exist with correct permissions
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['size'] > 0
+          - item_result['stat']['mode'] == '0640'
+          - item_result['stat']['pw_name'] == 'root'
+          - item_result['stat']['gr_name'] == 'ssl-cert'
+        fail_msg: "SSL private key not found, empty, or has wrong permissions/ownership"
+      loop: "{{ key_stat_results['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat SSL certificate directory
+      ansible.builtin.stat:
+        path: /etc/ssl/certs
+      register: ssl_certs_dir_stat
+
+    - name: Assert SSL certificate directory has correct permissions
+      ansible.builtin.assert:
+        that:
+          - ssl_certs_dir_stat['stat']['exists']
+          - ssl_certs_dir_stat['stat']['isdir']
+          - ssl_certs_dir_stat['stat']['mode'] == '0755'
+          - ssl_certs_dir_stat['stat']['pw_name'] == 'root'
+          - ssl_certs_dir_stat['stat']['gr_name'] == 'root'
+        fail_msg: "SSL certs directory has wrong permissions or ownership"
+
+    - name: Stat SSL private key directory
+      ansible.builtin.stat:
+        path: /etc/ssl/private
+      register: ssl_private_dir_stat
+
+    - name: Assert SSL private key directory has correct permissions
+      ansible.builtin.assert:
+        that:
+          - ssl_private_dir_stat['stat']['exists']
+          - ssl_private_dir_stat['stat']['isdir']
+          - ssl_private_dir_stat['stat']['mode'] == '0710'
+          - ssl_private_dir_stat['stat']['pw_name'] == 'root'
+          - ssl_private_dir_stat['stat']['gr_name'] == 'ssl-cert'
+        fail_msg: "SSL private key directory has wrong permissions or ownership"
+
+    - name: Check ssl-cert group exists
+      ansible.builtin.command:
+        argv:
+          - getent
+          - group
+          - ssl-cert
+      register: ssl_cert_group_check
+      changed_when: false
+      failed_when: ssl_cert_group_check['rc'] != 0
+
+# ============================================================
+# Play 5: HTTP responses and security headers
+# ============================================================
+- name: Verify - HTTP responses and security headers
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check HTTP redirect for test.cluster.local (301)
+      ansible.builtin.uri:
+        url: http://localhost/
+        headers:
+          Host: test.cluster.local
+        follow_redirects: none
+        status_code: 301
+      register: test_http_redirect
+
+    - name: Assert HTTP redirect location for test.cluster.local
+      ansible.builtin.assert:
+        that:
+          - "'https://test.cluster.local' in test_http_redirect['location']"
+        fail_msg: "HTTP redirect for test.cluster.local does not point to HTTPS"
+
+    - name: Check HTTP redirect for ci.cluster.local (301)
+      ansible.builtin.uri:
+        url: http://localhost/
+        headers:
+          Host: ci.cluster.local
+        follow_redirects: none
+        status_code: 301
+      register: ci_http_redirect
+
+    - name: Assert HTTP redirect location for ci.cluster.local
+      ansible.builtin.assert:
+        that:
+          - "'https://ci.cluster.local' in ci_http_redirect['location']"
+        fail_msg: "HTTP redirect for ci.cluster.local does not point to HTTPS"
+
+    - name: Check HTTP redirect for status.cluster.local (301)
+      ansible.builtin.uri:
+        url: http://localhost/
+        headers:
+          Host: status.cluster.local
+        follow_redirects: none
+        status_code: 301
+      register: status_http_redirect
+
+    - name: Assert HTTP redirect location for status.cluster.local
+      ansible.builtin.assert:
+        that:
+          - "'https://status.cluster.local' in status_http_redirect['location']"
+        fail_msg: "HTTP redirect for status.cluster.local does not point to HTTPS"
+
+    - name: Check HTTPS response and security headers for test.cluster.local
+      ansible.builtin.uri:
+        url: https://localhost/
+        headers:
+          Host: test.cluster.local
+        validate_certs: false
+        status_code: 200
+      register: test_https_response
+
+    - name: Assert HSTS header present for test.cluster.local
+      ansible.builtin.assert:
+        that:
+          - "'strict-transport-security' in test_https_response"
+        fail_msg: "Strict-Transport-Security header missing for test.cluster.local"
+
+    - name: Check HTTPS response and security headers for ci.cluster.local
+      ansible.builtin.uri:
+        url: https://localhost/
+        headers:
+          Host: ci.cluster.local
+        validate_certs: false
+        status_code: 200
+      register: ci_https_response
+
+    - name: Assert HSTS header present for ci.cluster.local
+      ansible.builtin.assert:
+        that:
+          - "'strict-transport-security' in ci_https_response"
+        fail_msg: "Strict-Transport-Security header missing for ci.cluster.local"
+
+    - name: Check HTTPS response and security headers for status.cluster.local
+      ansible.builtin.uri:
+        url: https://localhost/
+        headers:
+          Host: status.cluster.local
+        validate_certs: false
+        status_code: 200
+      register: status_https_response
+
+    - name: Assert HSTS header present for status.cluster.local
+      ansible.builtin.assert:
+        that:
+          - "'strict-transport-security' in status_https_response"
+        fail_msg: "Strict-Transport-Security header missing for status.cluster.local"
+
+# ============================================================
+# Play 6: Security hardening (fail2ban, sysctl, SSH)
+# ============================================================
+- name: Verify - Security hardening
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat fail2ban jail configuration
+      ansible.builtin.stat:
+        path: /etc/fail2ban/jail.local
+      register: fail2ban_jail_stat
+
+    - name: Assert fail2ban jail.local exists and is non-empty
+      ansible.builtin.assert:
+        that:
+          - fail2ban_jail_stat['stat']['exists']
+          - fail2ban_jail_stat['stat']['size'] > 0
+        fail_msg: "fail2ban jail.local not found or empty"
+
+    - name: Slurp fail2ban jail.local to verify jail sections
+      ansible.builtin.slurp:
+        src: /etc/fail2ban/jail.local
+      register: fail2ban_jail_content
+
+    - name: Assert fail2ban jail.local contains expected jails and settings
+      ansible.builtin.assert:
+        that:
+          - "'[sshd]' in (fail2ban_jail_content['content'] | b64decode)"
+          - "'[nginx-http-auth]' in (fail2ban_jail_content['content'] | b64decode)"
+          - "'[nginx-limit-req]' in (fail2ban_jail_content['content'] | b64decode)"
+          - "'[nginx-botsearch]' in (fail2ban_jail_content['content'] | b64decode)"
+          - "'bantime' in (fail2ban_jail_content['content'] | b64decode)"
+          - "'maxretry' in (fail2ban_jail_content['content'] | b64decode)"
+        fail_msg: "fail2ban jail.local is missing expected jail sections or settings"
+
+    - name: Stat sysctl security configuration
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/99-security.conf
+      register: sysctl_conf_stat
+
+    - name: Assert sysctl security configuration exists and is non-empty
+      ansible.builtin.assert:
+        that:
+          - sysctl_conf_stat['stat']['exists']
+          - sysctl_conf_stat['stat']['size'] > 0
+        fail_msg: "sysctl security configuration not found or empty"
+
+    - name: Slurp sysctl security configuration to verify parameters
+      ansible.builtin.slurp:
+        src: /etc/sysctl.d/99-security.conf
+      register: sysctl_conf_content
+
+    - name: Assert sysctl security configuration contains expected parameters
+      ansible.builtin.assert:
+        that:
+          - "'rp_filter' in (sysctl_conf_content['content'] | b64decode)"
+          - "'tcp_syncookies' in (sysctl_conf_content['content'] | b64decode)"
+          - "'icmp_echo_ignore_all' in (sysctl_conf_content['content'] | b64decode)"
+          - "'disable_ipv6' in (sysctl_conf_content['content'] | b64decode)"
+        fail_msg: "sysctl security configuration is missing expected kernel parameters"
+
+    - name: Slurp sshd_config to verify SSH hardening
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      register: sshd_config_content
+
+    - name: Assert SSH hardening settings are applied
+      ansible.builtin.assert:
+        that:
+          - "'PermitRootLogin no' in (sshd_config_content['content'] | b64decode)"
+          - "'PasswordAuthentication no' in (sshd_config_content['content'] | b64decode)"
+        fail_msg: "SSH hardening settings not found in sshd_config"
+
+    - name: Verify UFW firewall is active
+      ansible.builtin.command:
+        argv:
+          - ufw
+          - status
+      register: ufw_status_result
+      changed_when: false
+
+    - name: Assert UFW is active with expected rules
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in ufw_status_result['stdout']"
+          - "'22' in ufw_status_result['stdout'] or 'OpenSSH' in ufw_status_result['stdout'] or 'ssh' in ufw_status_result['stdout']"
+          - "'80' in ufw_status_result['stdout'] or 'Nginx HTTP' in ufw_status_result['stdout'] or 'http' in ufw_status_result['stdout']"
+          - "'443' in ufw_status_result['stdout'] or 'Nginx HTTPS' in ufw_status_result['stdout'] or 'https' in ufw_status_result['stdout']"
+        fail_msg: "UFW is not active or missing expected allow rules for SSH/HTTP/HTTPS"

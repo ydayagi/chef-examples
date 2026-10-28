@@ -1,0 +1,34 @@
+---
+# nginx multisite role defaults
+# Sites configuration
+nginx_multisite_sites:
+  test.cluster.local:
+    document_root: /opt/server/test
+    ssl_enabled: true
+  ci.cluster.local:
+    document_root: /opt/server/ci
+    ssl_enabled: true
+  status.cluster.local:
+    document_root: /opt/server/status
+    ssl_enabled: true
+# SSL directory paths
+nginx_multisite_ssl_certificate_path: /etc/ssl/certs
+nginx_multisite_ssl_private_key_path: /etc/ssl/private
+# SSL certificate subject fields
+nginx_multisite_ssl_country: US
+nginx_multisite_ssl_state: Example
+nginx_multisite_ssl_locality: Example
+nginx_multisite_ssl_org: Example Org
+nginx_multisite_ssl_ou: IT
+nginx_multisite_ssl_email: admin@example.com
+nginx_multisite_ssl_days: 365
+# Security settings
+nginx_multisite_fail2ban_enabled: true
+nginx_multisite_ufw_enabled: true
+nginx_multisite_ssh_disable_root: true
+nginx_multisite_ssh_password_auth: false
+# Web server user
+nginx_multisite_web_user: www-data
+nginx_multisite_web_group: www-data
+# Secure logging toggle (set to false only for debugging)
+nginx_multisite_secure_logging: true

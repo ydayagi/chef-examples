@@ -1,0 +1,100 @@
+---
+- name: Check if sshd_config exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config
+  register: nginx_multisite_sshd_config_stat
+
+- name: Install security packages
+  ansible.builtin.package:
+    name:
+      - fail2ban
+      - ufw
+    state: present
+  when: nginx_multisite_fail2ban_enabled | bool
+
+- name: Deploy fail2ban jail configuration
+  ansible.builtin.template:
+    src: fail2ban.jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    backup: true
+  when: nginx_multisite_fail2ban_enabled | bool
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban service
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started
+  when: nginx_multisite_fail2ban_enabled | bool
+
+- name: Set UFW default policy to deny
+  ansible.builtin.command:
+    cmd: ufw --force default deny
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Default incoming policy changed' in nginx_multisite_ufw_default.stdout"
+  register: nginx_multisite_ufw_default
+
+- name: Allow SSH through UFW
+  ansible.builtin.command:
+    cmd: ufw allow ssh
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_ssh.stdout"
+  register: nginx_multisite_ufw_ssh
+
+- name: Allow HTTP through UFW
+  ansible.builtin.command:
+    cmd: ufw allow http
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_http.stdout"
+  register: nginx_multisite_ufw_http
+
+- name: Allow HTTPS through UFW
+  ansible.builtin.command:
+    cmd: ufw allow https
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_https.stdout"
+  register: nginx_multisite_ufw_https
+
+- name: Enable UFW
+  ansible.builtin.command:
+    cmd: ufw --force enable
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Firewall is active and enabled' in nginx_multisite_ufw_enable.stdout"
+  register: nginx_multisite_ufw_enable
+
+- name: Deploy kernel security parameters
+  ansible.builtin.template:
+    src: sysctl-security.conf.j2
+    dest: /etc/sysctl.d/99-security.conf
+    mode: "0644"
+    backup: true
+  notify: Reload sysctl security parameters
+
+- name: Harden SSH - disable root login
+  ansible.builtin.lineinfile: # noqa: L068 - lineinfile is required here; no template owns sshd_config and blockinfile cannot target a single directive
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PermitRootLogin
+    line: PermitRootLogin no
+    state: present
+    backup: true
+    create: false
+    mode: "0600"
+  when:
+    - nginx_multisite_ssh_disable_root | bool
+    - nginx_multisite_sshd_config_stat.stat.exists # noqa: L039 - variable registered by prior stat task in this file
+  notify: Restart ssh
+
+- name: Harden SSH - disable password authentication
+  ansible.builtin.lineinfile: # noqa: L068 - lineinfile is required here; no template owns sshd_config and blockinfile cannot target a single directive
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PasswordAuthentication
+    line: PasswordAuthentication no
+    state: present
+    backup: true
+    create: false
+    mode: "0600"
+  when:
+    - not nginx_multisite_ssh_password_auth | bool
+    - nginx_multisite_sshd_config_stat.stat.exists # noqa: L039 - variable registered by prior stat task in this file
+  notify: Restart ssh

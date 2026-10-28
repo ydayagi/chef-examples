@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Dashboard - ci.cluster.local</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; }
+        .status { padding: 10px; background: #e3f2fd; border-left: 4px solid #2196f3; margin: 20px 0; }
+        .info { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .pipeline { background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 CI/CD Dashboard</h1>
+        <div class="status">
+            <strong>Status:</strong> Running on ci.cluster.local
+        </div>
+        <div class="info">
+            <h3>CI/CD Information</h3>
+            <ul>
+                <li><strong>Server:</strong> ci.cluster.local</li>
+                <li><strong>Document Root:</strong> /opt/server/ci/</li>
+                <li><strong>SSL:</strong> Enabled</li>
+                <li><strong>Purpose:</strong> Continuous Integration and Deployment</li>
+            </ul>
+        </div>
+        <div class="pipeline">
+            <h3>Recent Pipelines</h3>
+            <p>🟢 Build #123 - SUCCESS (2 minutes ago)</p>
+            <p>🟢 Build #122 - SUCCESS (1 hour ago)</p>
+            <p>🔴 Build #121 - FAILED (2 hours ago)</p>
+        </div>
+        <p>This is your CI/CD dashboard. Monitor build pipelines, deployments, and automation workflows from here.</p>
+    </div>
+</body>
+</html>

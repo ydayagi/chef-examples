@@ -1,0 +1,8 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": ".",
+    "description": "Installs and configures Nginx with three SSL-enabled internal subdomains, enforces OS-level security hardening (kernel sysctl, UFW, SSH, fail2ban), generates self-signed TLS certificates per vhost using a passphrase retrieved from CyberArk Conjur, and deploys per-site static content.",
+    "technology": "Chef"
+  }
+]

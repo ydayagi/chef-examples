@@ -1,0 +1,126 @@
+---
+- name: Install security packages
+  ansible.builtin.package:
+    name:
+      - fail2ban
+      - ufw
+    state: present
+
+- name: Deploy fail2ban jail configuration
+  ansible.builtin.template:
+    src: fail2ban.jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    backup: true
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban service
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+- name: Set UFW default policy to deny
+  ansible.builtin.command:
+    cmd: ufw --force default deny
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Default incoming policy changed' in nginx_multisite_ufw_default.stdout"
+  register: nginx_multisite_ufw_default
+
+- name: Allow SSH through UFW
+  ansible.builtin.command:
+    cmd: ufw allow ssh
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_ssh.stdout"
+  register: nginx_multisite_ufw_ssh
+
+- name: Allow HTTP through UFW
+  ansible.builtin.command:
+    cmd: ufw allow http
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_http.stdout"
+  register: nginx_multisite_ufw_http
+
+- name: Allow HTTPS through UFW
+  ansible.builtin.command:
+    cmd: ufw allow https
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Rules updated' in nginx_multisite_ufw_https.stdout"
+  register: nginx_multisite_ufw_https
+
+- name: Enable UFW
+  ansible.builtin.command:
+    cmd: ufw --force enable
+  when: nginx_multisite_ufw_enabled | bool
+  changed_when: "'Firewall is active and enabled' in nginx_multisite_ufw_enable.stdout"
+  register: nginx_multisite_ufw_enable
+
+- name: Fetch remote value from API endpoint
+  ansible.builtin.uri:
+    url: https://api.example.com/value_endpoint
+    method: GET
+    return_content: true
+  register: nginx_multisite_fetched_value
+
+- name: Fetch and parse remote value from API endpoint
+  ansible.builtin.uri:
+    url: https://api.example.com/parse_endpoint
+    method: GET
+    return_content: true
+  register: nginx_multisite_parsed_response
+
+- name: Parse value from API response # noqa: M005 - nginx_multisite_parsed_response is a registered variable from the prior task; re-templating is intentional and the content is controlled by the internal API endpoint
+  ansible.builtin.set_fact:
+    nginx_multisite_parsed_value: >-
+      {{ nginx_multisite_parsed_response.content | regex_search('pattern1:(.+)', '\1') | first | trim }}
+  when: nginx_multisite_parsed_response.content is search('pattern1:') # noqa: L039 - nginx_multisite_parsed_response is registered by the immediately preceding task
+
+- name: Assert parsed value was found
+  ansible.builtin.assert:
+    that:
+      - nginx_multisite_parsed_value is defined
+      - nginx_multisite_parsed_value | length > 0
+    fail_msg: Failed to parse value pattern from response body.
+  when: nginx_multisite_parsed_response.content is search('pattern1:') # noqa: L039 - nginx_multisite_parsed_response is registered by the immediately preceding task
+
+- name: Apply kernel security sysctl parameters
+  ansible.posix.sysctl:
+    name: "{{ item_sysctl['key'] }}"
+    value: "{{ item_sysctl['value'] }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-security.conf
+    reload: true
+  loop: "{{ nginx_multisite_sysctl_params | dict2items }}"
+  loop_control:
+    loop_var: item_sysctl
+
+- name: Check if sshd_config exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config
+  register: nginx_multisite_sshd_config_stat
+
+- name: Harden SSH - disable root login # noqa: L068 - lineinfile is appropriate here; replacing with a template would overwrite the entire sshd_config managed by the OS # noqa: L021 - lineinfile modifies an existing file; mode is not applicable # noqa: L039 - nginx_multisite_sshd_config_stat is registered by the preceding stat task
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PermitRootLogin
+    line: PermitRootLogin no
+    backup: true
+    state: present
+    create: false
+  when:
+    - nginx_multisite_ssh_disable_root | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
+  notify: Restart ssh
+
+- name: Harden SSH - disable password authentication # noqa: L068 - lineinfile is appropriate here; replacing with a template would overwrite the entire sshd_config managed by the OS # noqa: L021 - lineinfile modifies an existing file; mode is not applicable # noqa: L039 - nginx_multisite_sshd_config_stat is registered by the preceding stat task
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?PasswordAuthentication
+    line: PasswordAuthentication no
+    backup: true
+    state: present
+    create: false
+  when:
+    - not nginx_multisite_ssh_password_auth | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
+  notify: Restart ssh

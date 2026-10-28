@@ -1,0 +1,276 @@
+---
+# Play 1: Verify core nginx and security configuration files
+- name: Verify nginx and security config files
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat core nginx and security config files
+      ansible.builtin.stat:
+        path: "{{ item_config }}"
+      loop:
+        - /etc/nginx/nginx.conf
+        - /etc/nginx/conf.d/security.conf
+        - /etc/fail2ban/jail.local
+        - /etc/sysctl.d/99-security.conf
+        - /etc/ssh/sshd_config
+      loop_control:
+        loop_var: item_config
+      register: nginx_multisite_core_config_stat
+
+    - name: Assert core nginx and security config files exist and are non-empty
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isreg']
+          - item_result['stat']['size'] > 0
+        fail_msg: "Expected configuration file not found or empty"
+      loop: "{{ nginx_multisite_core_config_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Slurp sshd_config to verify SSH hardening
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      register: nginx_multisite_sshd_config_content
+
+    - name: Assert SSH hardening directives are present in sshd_config
+      ansible.builtin.assert:
+        that:
+          - "'PermitRootLogin no' in (nginx_multisite_sshd_config_content['content'] | b64decode)"
+          - "'PasswordAuthentication no' in (nginx_multisite_sshd_config_content['content'] | b64decode)"
+        fail_msg: "SSH hardening directives not found in sshd_config"
+
+    - name: Slurp sysctl security config to verify kernel parameters
+      ansible.builtin.slurp:
+        src: /etc/sysctl.d/99-security.conf
+      register: nginx_multisite_sysctl_content
+
+    - name: Assert key sysctl security parameters are present
+      ansible.builtin.assert:
+        that:
+          - "'tcp_syncookies' in (nginx_multisite_sysctl_content['content'] | b64decode)"
+          - "'rp_filter' in (nginx_multisite_sysctl_content['content'] | b64decode)"
+        fail_msg: "Expected sysctl security parameters not found in 99-security.conf"
+
+    - name: Slurp fail2ban jail.local to verify jail configuration
+      ansible.builtin.slurp:
+        src: /etc/fail2ban/jail.local
+      register: nginx_multisite_fail2ban_content
+
+    - name: Assert fail2ban jail sections are present
+      ansible.builtin.assert:
+        that:
+          - "'[sshd]' in (nginx_multisite_fail2ban_content['content'] | b64decode)"
+          - "'[nginx-http-auth]' in (nginx_multisite_fail2ban_content['content'] | b64decode)"
+          - "'bantime' in (nginx_multisite_fail2ban_content['content'] | b64decode)"
+        fail_msg: "Expected fail2ban jail sections not found in jail.local"
+
+# Play 2: Verify nginx virtual host site configs and symlinks
+- name: Verify nginx site configs and symlinks
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat nginx sites-available config files
+      ansible.builtin.stat:
+        path: "{{ item_site_config }}"
+      loop:
+        - /etc/nginx/sites-available/test.cluster.local
+        - /etc/nginx/sites-available/ci.cluster.local
+        - /etc/nginx/sites-available/status.cluster.local
+      loop_control:
+        loop_var: item_site_config
+      register: nginx_multisite_sites_available_stat
+
+    - name: Assert nginx sites-available config files exist and are non-empty
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isreg']
+          - item_result['stat']['size'] > 0
+        fail_msg: "Expected nginx sites-available config file not found or empty"
+      loop: "{{ nginx_multisite_sites_available_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat nginx sites-enabled symlinks
+      ansible.builtin.stat:
+        path: "{{ item_site_link }}"
+      loop:
+        - /etc/nginx/sites-enabled/test.cluster.local
+        - /etc/nginx/sites-enabled/ci.cluster.local
+        - /etc/nginx/sites-enabled/status.cluster.local
+      loop_control:
+        loop_var: item_site_link
+      register: nginx_multisite_sites_enabled_stat
+
+    - name: Assert nginx sites-enabled symlinks exist and point to sites-available
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['islnk']
+        fail_msg: "Expected nginx sites-enabled symlink not found"
+      loop: "{{ nginx_multisite_sites_enabled_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat default nginx site (must be absent)
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/default
+      register: nginx_multisite_default_site_stat
+
+    - name: Assert default nginx site is removed
+      ansible.builtin.assert:
+        that:
+          - not nginx_multisite_default_site_stat['stat']['exists']
+        fail_msg: "Default nginx site should have been removed but still exists"
+
+    - name: Slurp test.cluster.local site config to verify SSL and redirect directives
+      ansible.builtin.slurp:
+        src: /etc/nginx/sites-available/test.cluster.local
+      register: nginx_multisite_test_site_content
+
+    - name: Assert test.cluster.local site config contains SSL and redirect directives
+      ansible.builtin.assert:
+        that:
+          - "'test.cluster.local' in (nginx_multisite_test_site_content['content'] | b64decode)"
+          - "'ssl' in (nginx_multisite_test_site_content['content'] | b64decode)"
+          - "'return 301' in (nginx_multisite_test_site_content['content'] | b64decode)"
+          - "'/opt/server/test' in (nginx_multisite_test_site_content['content'] | b64decode)"
+        fail_msg: "test.cluster.local site config missing expected SSL or redirect directives"
+
+# Play 3: Verify document roots and static files
+- name: Verify document roots and static files
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat site document root directories
+      ansible.builtin.stat:
+        path: "{{ item_docroot }}"
+      loop:
+        - /opt/server/test
+        - /opt/server/ci
+        - /opt/server/status
+      loop_control:
+        loop_var: item_docroot
+      register: nginx_multisite_docroot_stat
+
+    - name: Assert site document root directories exist
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isdir']
+        fail_msg: "Expected site document root directory not found"
+      loop: "{{ nginx_multisite_docroot_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat site index.html static files
+      ansible.builtin.stat:
+        path: "{{ item_index }}"
+      loop:
+        - /opt/server/test/index.html
+        - /opt/server/ci/index.html
+        - /opt/server/status/index.html
+      loop_control:
+        loop_var: item_index
+      register: nginx_multisite_index_stat
+
+    - name: Assert site index.html static files exist and are non-empty
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isreg']
+          - item_result['stat']['size'] > 0
+        fail_msg: "Expected site index.html not found or empty"
+      loop: "{{ nginx_multisite_index_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+# Play 4: Verify SSL certificates and private keys
+- name: Verify SSL certificates and private keys
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat SSL certificate files
+      ansible.builtin.stat:
+        path: "{{ item_cert }}"
+      loop:
+        - /etc/ssl/certs/test.cluster.local.crt
+        - /etc/ssl/certs/ci.cluster.local.crt
+        - /etc/ssl/certs/status.cluster.local.crt
+      loop_control:
+        loop_var: item_cert
+      register: nginx_multisite_cert_stat
+
+    - name: Assert SSL certificate files exist and are non-empty
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isreg']
+          - item_result['stat']['size'] > 0
+        fail_msg: "Expected SSL certificate file not found or empty"
+      loop: "{{ nginx_multisite_cert_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+    - name: Stat SSL private key files
+      ansible.builtin.stat:
+        path: "{{ item_key }}"
+      loop:
+        - /etc/ssl/private/test.cluster.local.key
+        - /etc/ssl/private/ci.cluster.local.key
+        - /etc/ssl/private/status.cluster.local.key
+      loop_control:
+        loop_var: item_key
+      register: nginx_multisite_key_stat
+
+    - name: Assert SSL private key files exist with correct permissions and group
+      ansible.builtin.assert:
+        that:
+          - item_result['stat']['exists']
+          - item_result['stat']['isreg']
+          - item_result['stat']['size'] > 0
+          - item_result['stat']['mode'] == '0640'
+          - item_result['stat']['gr_name'] == 'ssl-cert'
+        fail_msg: "SSL private key not found or has incorrect permissions/group"
+      loop: "{{ nginx_multisite_key_stat['results'] }}"
+      loop_control:
+        loop_var: item_result
+
+# Play 5: Verify services are running and ports are listening
+- name: Verify services and network ports
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert nginx service is active and enabled
+      ansible.builtin.assert:
+        that:
+          - "'nginx.service' in ansible_facts['services']"
+          - "ansible_facts['services']['nginx.service']['state'] == 'running'"
+          - "ansible_facts['services']['nginx.service']['status'] == 'enabled'"
+        fail_msg: "nginx service is not running or not enabled"
+
+    - name: Assert fail2ban service is active and enabled
+      ansible.builtin.assert:
+        that:
+          - "'fail2ban.service' in ansible_facts['services']"
+          - "ansible_facts['services']['fail2ban.service']['state'] == 'running'"
+          - "ansible_facts['services']['fail2ban.service']['status'] == 'enabled'"
+        fail_msg: "fail2ban service is not running or not enabled"
+
+    - name: Assert nginx is listening on port 80
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 10
+        state: started
+
+    - name: Assert nginx is listening on port 443
+      ansible.builtin.wait_for:
+        port: 443
+        host: 127.0.0.1
+        timeout: 10
+        state: started

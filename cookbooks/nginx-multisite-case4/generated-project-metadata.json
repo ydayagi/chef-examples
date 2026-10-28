@@ -1,0 +1,8 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": ".",
+    "description": "Nginx multi-site web server cookbook that installs and configures Nginx to serve three SSL-enabled internal subdomains, each with its own virtual-host config, self-signed TLS certificate, and static content. It orchestrates OS-level security hardening, Nginx installation and configuration, SSL certificate generation, and per-site virtual-host deployment.",
+    "technology": "Chef"
+  }
+]

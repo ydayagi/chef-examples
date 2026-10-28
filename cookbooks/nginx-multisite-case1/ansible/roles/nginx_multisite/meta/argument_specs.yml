@@ -1,0 +1,143 @@
+---
+argument_specs:
+  main:
+    short_description: Configure nginx as a multi-site SSL web server with security hardening
+    description:
+      - Deploys nginx with multiple SSL-enabled virtual hosts on Ubuntu/CentOS systems.
+      - Hardens the host with fail2ban, UFW firewall rules, and kernel sysctl security parameters.
+      - Generates self-signed TLS certificates per site using an SSL passphrase from AAP credentials.
+      - Deploys per-site document roots with static index.html files.
+      - All sites enforce HTTPS-only access with HTTP to HTTPS redirects, TLS 1.2/1.3, HSTS, and security headers.
+    options:
+      nginx_multisite_sites:
+        type: dict
+        required: false
+        default:
+          test.cluster.local:
+            document_root: /opt/server/test
+            ssl_enabled: true
+          ci.cluster.local:
+            document_root: /opt/server/ci
+            ssl_enabled: true
+          status.cluster.local:
+            document_root: /opt/server/status
+            ssl_enabled: true
+        description: >-
+          Dictionary of virtual host sites to configure. Each key is the server_name (FQDN)
+          and the value is a dict with document_root (str) and ssl_enabled (bool).
+      nginx_multisite_ssl_certificate_path:
+        type: str
+        required: false
+        default: /etc/ssl/certs
+        description: Directory path where SSL certificates (.crt files) are stored.
+      nginx_multisite_ssl_private_key_path:
+        type: str
+        required: false
+        default: /etc/ssl/private
+        description: Directory path where SSL private keys (.key files) are stored.
+      nginx_multisite_ssl_country:
+        type: str
+        required: false
+        default: US
+        description: Country code (C) for the self-signed certificate subject.
+      nginx_multisite_ssl_state:
+        type: str
+        required: false
+        default: Example
+        description: State or province (ST) for the self-signed certificate subject.
+      nginx_multisite_ssl_locality:
+        type: str
+        required: false
+        default: Example
+        description: Locality or city (L) for the self-signed certificate subject.
+      nginx_multisite_ssl_org:
+        type: str
+        required: false
+        default: Example Org
+        description: Organization name (O) for the self-signed certificate subject.
+      nginx_multisite_ssl_ou:
+        type: str
+        required: false
+        default: IT
+        description: Organizational unit (OU) for the self-signed certificate subject.
+      nginx_multisite_ssl_email:
+        type: str
+        required: false
+        default: admin@example.com
+        description: Email address for the self-signed certificate subject.
+      nginx_multisite_ssl_days:
+        type: int
+        required: false
+        default: 365
+        description: Validity period in days for the self-signed SSL certificates.
+      nginx_multisite_fail2ban_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to install and configure fail2ban intrusion prevention.
+      nginx_multisite_ufw_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to configure UFW firewall rules.
+      nginx_multisite_ssh_disable_root:
+        type: bool
+        required: false
+        default: true
+        description: Whether to set PermitRootLogin no in /etc/ssh/sshd_config.
+      nginx_multisite_ssh_password_auth:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          Whether to allow SSH password authentication. When false (default),
+          PasswordAuthentication is set to no in /etc/ssh/sshd_config.
+      nginx_multisite_web_user:
+        type: str
+        required: false
+        default: www-data
+        description: System user that owns the nginx document root directories and files.
+      nginx_multisite_web_group:
+        type: str
+        required: false
+        default: www-data
+        description: System group that owns the nginx document root directories and files.
+      nginx_multisite_secure_logging:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Controls no_log on tasks that handle the ssl_passphrase secret.
+          Set to false only when debugging certificate generation failures.
+      ssl_passphrase:
+        type: str
+        required: true
+        description: >-
+          PEM passphrase used when generating self-signed SSL certificates.
+          Injected at runtime by the AAP CyberArk Conjur credential type.
+          Do NOT hardcode this value.
+      conjur_appliance_url:
+        type: str
+        required: true
+        description: >-
+          URL of the CyberArk Conjur appliance (e.g. https://conjur.example.com).
+          Injected at runtime by the AAP CyberArk Conjur credential type.
+      conjur_account:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur account name (e.g. myorg).
+          Injected at runtime by the AAP CyberArk Conjur credential type.
+      conjur_variable_path:
+        type: str
+        required: true
+        description: >-
+          Path to the Conjur variable holding the SSL passphrase
+          (e.g. production/nginx/ssl_passphrase).
+          Injected at runtime by the AAP CyberArk Conjur credential type.
+      conjur_api_key:
+        type: str
+        required: true
+        description: >-
+          API key for authenticating to CyberArk Conjur.
+          Injected at runtime by the AAP CyberArk Conjur credential type. Sensitive.

@@ -1,0 +1,147 @@
+---
+argument_specs:
+  main:
+    short_description: Configure Nginx multi-site with SSL, fail2ban, UFW, and SSH hardening
+    description:
+      - Installs and configures Nginx to host multiple SSL-enabled virtual hosts.
+      - Hardens the host with UFW firewall rules, fail2ban intrusion prevention, and kernel-level sysctl security parameters.
+      - Generates self-signed SSL certificates per site using OpenSSL.
+      - Locks down SSH access (no root login, no password authentication).
+    options:
+      nginx_multisite_sites:
+        type: dict
+        required: false
+        default:
+          test.cluster.local:
+            document_root: /opt/server/test
+            ssl_enabled: true
+          ci.cluster.local:
+            document_root: /opt/server/ci
+            ssl_enabled: true
+          status.cluster.local:
+            document_root: /opt/server/status
+            ssl_enabled: true
+        description: >-
+          Dictionary of virtual host sites to configure. Each key is the server_name
+          (FQDN) and the value is a dict with document_root and ssl_enabled fields.
+      nginx_multisite_ssl_certificate_path:
+        type: str
+        required: false
+        default: /etc/ssl/certs
+        description: Directory path where SSL certificates (.crt) are stored.
+      nginx_multisite_ssl_private_key_path:
+        type: str
+        required: false
+        default: /etc/ssl/private
+        description: Directory path where SSL private keys (.key) are stored.
+      nginx_multisite_ssl_country:
+        type: str
+        required: false
+        default: US
+        description: Country code (C) for the SSL certificate subject.
+      nginx_multisite_ssl_state:
+        type: str
+        required: false
+        default: Example
+        description: State or province (ST) for the SSL certificate subject.
+      nginx_multisite_ssl_locality:
+        type: str
+        required: false
+        default: Example
+        description: Locality or city (L) for the SSL certificate subject.
+      nginx_multisite_ssl_org:
+        type: str
+        required: false
+        default: Example Org
+        description: Organization name (O) for the SSL certificate subject.
+      nginx_multisite_ssl_ou:
+        type: str
+        required: false
+        default: IT
+        description: Organizational unit (OU) for the SSL certificate subject.
+      nginx_multisite_ssl_email:
+        type: str
+        required: false
+        default: admin@example.com
+        description: Email address for the SSL certificate subject.
+      nginx_multisite_ssl_days:
+        type: int
+        required: false
+        default: 365
+        description: Number of days the self-signed SSL certificate is valid.
+      nginx_multisite_fail2ban_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to install and configure fail2ban intrusion prevention.
+      nginx_multisite_ufw_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to configure UFW firewall rules.
+      nginx_multisite_ssh_disable_root:
+        type: bool
+        required: false
+        default: true
+        description: Whether to disable root SSH login in sshd_config.
+      nginx_multisite_ssh_password_auth:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          Whether to allow SSH password authentication. Set to false to disable
+          password authentication (recommended).
+      nginx_multisite_web_user:
+        type: str
+        required: false
+        default: www-data
+        description: System user that owns the nginx document root directories.
+      nginx_multisite_web_group:
+        type: str
+        required: false
+        default: www-data
+        description: System group that owns the nginx document root directories.
+      nginx_multisite_secure_logging:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Controls no_log on tasks that handle the ssl_passphrase secret.
+          Set to false only when debugging SSL certificate generation failures.
+      nginx_multisite_sysctl_params:
+        type: dict
+        required: false
+        default:
+          net.ipv4.conf.default.rp_filter: "1"
+          net.ipv4.conf.all.rp_filter: "1"
+          net.ipv4.conf.all.accept_redirects: "0"
+          net.ipv6.conf.all.accept_redirects: "0"
+          net.ipv4.conf.default.accept_redirects: "0"
+          net.ipv6.conf.default.accept_redirects: "0"
+          net.ipv4.conf.all.send_redirects: "0"
+          net.ipv4.conf.default.send_redirects: "0"
+          net.ipv4.conf.all.accept_source_route: "0"
+          net.ipv6.conf.all.accept_source_route: "0"
+          net.ipv4.conf.default.accept_source_route: "0"
+          net.ipv6.conf.default.accept_source_route: "0"
+          net.ipv4.conf.all.log_martians: "1"
+          net.ipv4.conf.default.log_martians: "1"
+          net.ipv4.icmp_echo_ignore_all: "1"
+          net.ipv4.icmp_echo_ignore_broadcasts: "1"
+          net.ipv6.conf.all.disable_ipv6: "1"
+          net.ipv6.conf.default.disable_ipv6: "1"
+          net.ipv6.conf.lo.disable_ipv6: "1"
+          net.ipv4.tcp_syncookies: "1"
+          net.ipv4.tcp_max_syn_backlog: "2048"
+          net.ipv4.tcp_synack_retries: "2"
+          net.ipv4.tcp_syn_retries: "5"
+        description: >-
+          Dictionary of kernel sysctl parameters to apply for security hardening.
+          Written to /etc/sysctl.d/99-security.conf.
+      ssl_passphrase:
+        type: str
+        required: true
+        description: >-
+          SSL certificate passphrase used as the PEM passphrase when generating
+          self-signed certificates. Injected at runtime by the AAP CyberArk Conjur
+          credential type. Never set this in playbooks or inventory.

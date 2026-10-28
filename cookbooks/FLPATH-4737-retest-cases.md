@@ -15,3 +15,22 @@ files — no migration plans or generated Ansible output.
 The converter fix for cases 4 and 5 is step 7 ("Detect and describe custom
 resources and libraries") in `prompts/chef_analysis_system.md`, on the
 `flpath4737-chef` branch of the x2a-convertor repository.
+
+## Retest results (2026-10-28)
+
+- **case4, case5** (with the fix): both custom fetch resources converted in
+  each — `ansible.builtin.uri` tasks plus regex parsing. Reproduced the
+  original post-fix runs.
+- **case1, case2** (unmodified converter): converted correctly, matching the
+  original runs.
+- **case3** (unmodified converter, the original drop case): the drop did
+  **not** reproduce — both `fetch_token` and `fetch_and_parse_token` were
+  converted this run. Like the Puppet equivalent, the original drop was
+  nondeterministic: with no detection instruction in the analyze prompt,
+  whether a custom resource survives depends on the LLM volunteering it. The
+  fix makes detection instructed rather than left to chance.
+- Side finding: when `--module-migration-plan` is passed as an absolute path,
+  the module selector LLM sometimes answers with a repository-root-relative
+  path (e.g. `cookbooks/nginx-multisite-case3`) instead of the plan's
+  `Path: .`, and the run fails on path validation with no recovery. Passing
+  the plan as a relative path (as `full-migrate` does) avoids it.

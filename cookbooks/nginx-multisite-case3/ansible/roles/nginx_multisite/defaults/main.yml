@@ -1,0 +1,34 @@
+---
+# nginx_multisite role defaults
+# Secure logging toggle - set to false to debug secret-handling tasks
+nginx_multisite_secure_logging: true
+# nginx sites configuration
+nginx_multisite_sites:
+  test.cluster.local:
+    document_root: /opt/server/test
+    ssl_enabled: true
+  ci.cluster.local:
+    document_root: /opt/server/ci
+    ssl_enabled: true
+  status.cluster.local:
+    document_root: /opt/server/status
+    ssl_enabled: true
+# SSL certificate paths
+nginx_multisite_ssl_certificate_path: /etc/ssl/certs
+nginx_multisite_ssl_private_key_path: /etc/ssl/private
+# fail2ban configuration
+nginx_multisite_fail2ban_enabled: true
+# UFW firewall configuration
+nginx_multisite_ufw_enabled: true
+# SSH hardening
+nginx_multisite_ssh_disable_root: true
+nginx_multisite_ssh_password_auth: false
+# OAuth token endpoint (injected by AAP credential at runtime)
+# token_url: "{{ token_url }}"
+# client_id: "{{ client_id }}"
+# client_secret: "{{ client_secret }}"  # secret - injected by AAP
+# Parsed token endpoint (injected by AAP credential at runtime)
+# token_endpoint_url: "{{ token_endpoint_url }}"
+# extracted_token: "{{ extracted_token }}"  # secret - injected by AAP
+# SSL passphrase (injected by AAP credential at runtime)
+# ssl_passphrase: "{{ ssl_passphrase }}"  # secret - injected by AAP

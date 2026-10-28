@@ -1,0 +1,78 @@
+---
+- name: Install SSL packages
+  ansible.builtin.package:
+    name:
+      - openssl
+      - ca-certificates
+    state: present
+
+- name: Create ssl-cert group
+  ansible.builtin.group:
+    name: ssl-cert
+    state: present
+
+- name: Create SSL certificate directory
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_certificate_path }}" # noqa: R114 - path from role defaults, not user input
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create SSL private key directory
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_private_key_path }}" # noqa: R114 - path from role defaults, not user input
+    state: directory
+    owner: root
+    group: ssl-cert
+    mode: "0710"
+
+- name: Check if SSL certificate and key already exist
+  ansible.builtin.stat:
+    path: "{{ nginx_multisite_ssl_certificate_path }}/{{ item_site['key'] }}.crt"
+  loop: "{{ nginx_multisite_sites | dict2items | selectattr('value.ssl_enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: item_site
+  register: nginx_multisite_cert_stat
+
+- name: Check if SSL private key already exists
+  ansible.builtin.stat:
+    path: "{{ nginx_multisite_ssl_private_key_path }}/{{ item_site['key'] }}.key"
+  loop: "{{ nginx_multisite_sites | dict2items | selectattr('value.ssl_enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: item_site
+  register: nginx_multisite_key_stat
+
+- name: Generate self-signed SSL certificates # noqa: R101 - command built from role defaults and loop var over role-defined sites dict, not user input # noqa: L039 - nginx_multisite_cert_stat and nginx_multisite_key_stat registered by prior tasks; ssl_passphrase from role vars
+  ansible.builtin.shell:
+    cmd: |
+      openssl req -x509 -days 365 -newkey rsa:2048 \
+        -keyout {{ nginx_multisite_ssl_private_key_path }}/{{ item_site['key'] }}.key \
+        -out {{ nginx_multisite_ssl_certificate_path }}/{{ item_site['key'] }}.crt \
+        -passout pass:{{ ssl_passphrase }} \
+        -subj "/C=US/ST=Example/L=Example/O=Example Org/OU=IT/CN={{ item_site['key'] }}/emailAddress=admin@example.com"
+  when: >
+    not (nginx_multisite_cert_stat.results |
+      selectattr('item_site.key', 'equalto', item_site['key']) |
+      map(attribute='stat.exists') | first | default(false))
+    or
+    not (nginx_multisite_key_stat.results |
+      selectattr('item_site.key', 'equalto', item_site['key']) |
+      map(attribute='stat.exists') | first | default(false))
+  changed_when: true
+  loop: "{{ nginx_multisite_sites | dict2items | selectattr('value.ssl_enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: item_site
+  notify: Reload nginx
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Set SSL private key permissions
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_private_key_path }}/{{ item_site['key'] }}.key" # noqa: R114 - path from role-defined sites dict, not user input
+    owner: root
+    group: ssl-cert
+    mode: "0640"
+    state: file
+  loop: "{{ nginx_multisite_sites | dict2items | selectattr('value.ssl_enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: item_site

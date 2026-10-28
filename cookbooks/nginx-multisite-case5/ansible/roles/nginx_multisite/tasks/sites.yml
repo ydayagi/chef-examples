@@ -1,0 +1,35 @@
+---
+# nginx virtual host site configuration tasks
+
+- name: Deploy nginx virtual host configurations
+  ansible.builtin.template:
+    src: site.conf.j2
+    dest: /etc/nginx/sites-available/{{ item_site['key'] }} # noqa: R114 - path from role-defined sites dict, not user input
+    mode: "0644"
+    backup: true
+  loop: "{{ nginx_multisite_sites | dict2items }}"
+  loop_control:
+    loop_var: item_site
+  notify: Reload nginx
+  vars:
+    server_name: "{{ item_site['key'] }}"
+    document_root: "{{ item_site['value']['document_root'] }}"
+    ssl_enabled: "{{ item_site['value']['ssl_enabled'] }}"
+    cert_file: "{{ nginx_multisite_ssl_certificate_path }}/{{ item_site['key'] }}.crt"
+    key_file: "{{ nginx_multisite_ssl_private_key_path }}/{{ item_site['key'] }}.key"
+
+- name: Enable nginx virtual host sites (symlink to sites-enabled)
+  ansible.builtin.file: # noqa: L021 - state: link; mode is ignored by the OS for symlinks
+    src: /etc/nginx/sites-available/{{ item_site['key'] }}
+    dest: /etc/nginx/sites-enabled/{{ item_site['key'] }} # noqa: R114 - path from role-defined sites dict, not user input
+    state: link
+  loop: "{{ nginx_multisite_sites | dict2items }}"
+  loop_control:
+    loop_var: item_site
+  notify: Reload nginx
+
+- name: Remove default nginx site
+  ansible.builtin.file: # noqa: L021 - state: absent; mode is not applicable for file deletion
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx

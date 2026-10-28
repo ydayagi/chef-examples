@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Status - status.cluster.local</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; }
+        .status { padding: 10px; background: #d4edda; border-left: 4px solid #28a745; margin: 20px 0; }
+        .info { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .service { background: #f8f9fa; padding: 10px; margin: 5px 0; border-radius: 4px; display: flex; justify-content: space-between; }
+        .service-up { border-left: 4px solid #28a745; }
+        .service-down { border-left: 4px solid #dc3545; }
+        .uptime { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 System Status</h1>
+        <div class="status">
+            <strong>Overall Status:</strong> All Systems Operational
+        </div>
+        <div class="info">
+            <h3>Server Information</h3>
+            <ul>
+                <li><strong>Server:</strong> status.cluster.local</li>
+                <li><strong>Document Root:</strong> /opt/server/status/</li>
+                <li><strong>SSL:</strong> Enabled</li>
+                <li><strong>Purpose:</strong> System monitoring and status reporting</li>
+            </ul>
+        </div>
+        <h3>Service Status</h3>
+        <div class="service service-up">
+            <span>🌐 Nginx Web Server</span>
+            <span style="color: #28a745;">✅ UP</span>
+        </div>
+        <div class="service service-up">
+            <span>🔒 SSL Certificates</span>
+            <span style="color: #28a745;">✅ VALID</span>
+        </div>
+        <div class="service service-up">
+            <span>🛡️ Firewall (UFW)</span>
+            <span style="color: #28a745;">✅ ACTIVE</span>
+        </div>
+        <div class="service service-up">
+            <span>🚫 Fail2Ban</span>
+            <span style="color: #28a745;">✅ RUNNING</span>
+        </div>
+        <div class="uptime">
+            <p><strong>Server Uptime:</strong> 7 days, 14 hours, 32 minutes</p>
+            <p><strong>Last Updated:</strong> <span id="timestamp"></span></p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+    </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+---
+# SSL certificate generation tasks
+
+- name: Install SSL packages
+  ansible.builtin.package:
+    name:
+      - openssl
+      - ca-certificates
+    state: present
+
+- name: Create ssl-cert group
+  ansible.builtin.group:
+    name: ssl-cert
+    state: present
+
+- name: Create SSL certificates directory
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_certificate_path }}" # noqa: R114 - path from role defaults, not user input
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create SSL private key directory
+  ansible.builtin.file:
+    path: "{{ nginx_multisite_ssl_private_key_path }}" # noqa: R114 - path from role defaults, not user input
+    state: directory
+    owner: root
+    group: ssl-cert
+    mode: "0710"
+
+- name: Generate self-signed SSL certificates for each site
+  ansible.builtin.shell: # noqa: R101 - command is constructed from role defaults and loop var over role-defined sites dict, not user input
+    cmd: |
+      openssl req -x509 -days 365 -newkey rsa:2048 \
+        -keyout {{ nginx_multisite_ssl_private_key_path }}/{{ item_ssl['key'] }}.key \
+        -out {{ nginx_multisite_ssl_certificate_path }}/{{ item_ssl['key'] }}.crt \
+        -passout pass:{{ ssl_passphrase }} \
+        -subj "/C=US/ST=Example/L=Example/O=Example Org/OU=IT/CN={{ item_ssl['key'] }}/emailAddress=admin@example.com"
+      chmod 640 {{ nginx_multisite_ssl_private_key_path }}/{{ item_ssl['key'] }}.key
+      chown root:ssl-cert {{ nginx_multisite_ssl_private_key_path }}/{{ item_ssl['key'] }}.key
+    creates: "{{ nginx_multisite_ssl_certificate_path }}/{{ item_ssl['key'] }}.crt"
+  loop: "{{ nginx_multisite_sites | dict2items | selectattr('value.ssl_enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: item_ssl
+  notify: Reload nginx
+  no_log: "{{ nginx_multisite_secure_logging }}"
+  changed_when: true # noqa: L039 - ssl_passphrase is supplied via vault by the caller

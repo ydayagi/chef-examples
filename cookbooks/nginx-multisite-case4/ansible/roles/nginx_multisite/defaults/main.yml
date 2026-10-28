@@ -1,0 +1,60 @@
+---
+# Nginx sites configuration
+nginx_multisite_sites:
+  test.cluster.local:
+    document_root: /opt/server/test
+    ssl_enabled: true
+  ci.cluster.local:
+    document_root: /opt/server/ci
+    ssl_enabled: true
+  status.cluster.local:
+    document_root: /opt/server/status
+    ssl_enabled: true
+# SSL certificate paths
+nginx_multisite_ssl_certificate_path: /etc/ssl/certs
+nginx_multisite_ssl_private_key_path: /etc/ssl/private
+# SSL certificate subject fields
+nginx_multisite_ssl_country: US
+nginx_multisite_ssl_state: Example
+nginx_multisite_ssl_locality: Example
+nginx_multisite_ssl_org: Example Org
+nginx_multisite_ssl_ou: IT
+nginx_multisite_ssl_email: admin@example.com
+nginx_multisite_ssl_days: 365
+# Security: fail2ban
+nginx_multisite_fail2ban_enabled: true
+# Security: UFW firewall
+nginx_multisite_ufw_enabled: true
+# Security: SSH hardening
+nginx_multisite_ssh_disable_root: true
+nginx_multisite_ssh_password_auth: false
+# Nginx web server user
+nginx_multisite_web_user: www-data
+nginx_multisite_web_group: www-data
+# Secure logging toggle (set to false only for debugging)
+nginx_multisite_secure_logging: true
+# Kernel sysctl security parameters
+nginx_multisite_sysctl_params:
+  net.ipv4.conf.default.rp_filter: "1"
+  net.ipv4.conf.all.rp_filter: "1"
+  net.ipv4.conf.all.accept_redirects: "0"
+  net.ipv6.conf.all.accept_redirects: "0"
+  net.ipv4.conf.default.accept_redirects: "0"
+  net.ipv6.conf.default.accept_redirects: "0"
+  net.ipv4.conf.all.send_redirects: "0"
+  net.ipv4.conf.default.send_redirects: "0"
+  net.ipv4.conf.all.accept_source_route: "0"
+  net.ipv6.conf.all.accept_source_route: "0"
+  net.ipv4.conf.default.accept_source_route: "0"
+  net.ipv6.conf.default.accept_source_route: "0"
+  net.ipv4.conf.all.log_martians: "1"
+  net.ipv4.conf.default.log_martians: "1"
+  net.ipv4.icmp_echo_ignore_all: "1"
+  net.ipv4.icmp_echo_ignore_broadcasts: "1"
+  net.ipv6.conf.all.disable_ipv6: "1"
+  net.ipv6.conf.default.disable_ipv6: "1"
+  net.ipv6.conf.lo.disable_ipv6: "1"
+  net.ipv4.tcp_syncookies: "1"
+  net.ipv4.tcp_max_syn_backlog: "2048"
+  net.ipv4.tcp_synack_retries: "2"
+  net.ipv4.tcp_syn_retries: "5"

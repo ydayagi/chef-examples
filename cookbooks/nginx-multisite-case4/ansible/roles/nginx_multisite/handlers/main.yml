@@ -1,0 +1,27 @@
+---
+- name: Reload nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+
+- name: Restart nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+
+- name: Restart ssh
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+
+- name: Reload sysctl
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.default.rp_filter
+    value: "1"
+    state: present
+    reload: true

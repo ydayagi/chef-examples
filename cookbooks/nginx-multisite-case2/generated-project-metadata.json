@@ -1,0 +1,8 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": ".",
+    "description": "Installs and configures Nginx to serve three SSL-enabled internal subdomains with full lifecycle management including TLS certificate generation via CyberArk Conjur, OS-level security hardening (UFW, fail2ban, sysctl, SSH lockdown), and per-site virtual host configuration.",
+    "technology": "Chef"
+  }
+]
