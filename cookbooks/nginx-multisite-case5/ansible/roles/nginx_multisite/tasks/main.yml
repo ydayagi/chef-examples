@@ -1,17 +1,15 @@
 ---
-# nginx_multisite role - main task entry point
-
 - name: Validate credential variables
   ansible.builtin.include_tasks: validate_credentials.yml
 
-- name: Apply security hardening (fail2ban, UFW, sysctl, SSH)
+- name: Include security tasks
   ansible.builtin.include_tasks: security.yml
 
-- name: Install and configure nginx
+- name: Include nginx tasks
   ansible.builtin.include_tasks: nginx.yml
 
-- name: Generate SSL certificates
+- name: Include SSL tasks
   ansible.builtin.include_tasks: ssl.yml
 
-- name: Configure nginx virtual host sites
+- name: Include sites tasks
   ansible.builtin.include_tasks: sites.yml

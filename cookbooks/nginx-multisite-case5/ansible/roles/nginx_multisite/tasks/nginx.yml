@@ -1,12 +1,10 @@
 ---
-# nginx installation and base configuration tasks
-
-- name: Install nginx
+- name: Install nginx package
   ansible.builtin.package:
     name: nginx
     state: present
 
-- name: Deploy nginx main configuration
+- name: Deploy global nginx configuration
   ansible.builtin.template:
     src: nginx.conf.j2
     dest: /etc/nginx/nginx.conf
@@ -14,7 +12,7 @@
     backup: true
   notify: Reload nginx
 
-- name: Deploy nginx security configuration
+- name: Deploy nginx security snippet
   ansible.builtin.template:
     src: security.conf.j2
     dest: /etc/nginx/conf.d/security.conf
@@ -24,31 +22,29 @@
 
 - name: Create site document root directories
   ansible.builtin.file:
-    path: "{{ item_site['value']['document_root'] }}" # noqa: R114 - path from role-defined sites dict, not user input
+    path: "{{ item_nginx_site['value']['document_root'] }}" # noqa: R114 - path from role-defined sites dict, not user input
     state: directory
     owner: www-data
     group: www-data
     mode: "0755"
   loop: "{{ nginx_multisite_sites | dict2items }}"
   loop_control:
-    loop_var: item_site
+    loop_var: item_nginx_site
 
 - name: Deploy site index.html static files
   ansible.builtin.copy:
-    src: "files/{{ item_site['key'].split('.')[0] }}/index.html"
-    dest: "{{ item_site['value']['document_root'] }}/index.html" # noqa: R114 - path from role-defined sites dict, not user input
+    src: "files/{{ item_nginx_site['key'].split('.')[0] }}/index.html"
+    dest: "{{ item_nginx_site['value']['document_root'] }}/index.html" # noqa: R114 - path from role-defined sites dict, not user input
     owner: www-data
     group: www-data
     mode: "0644"
     backup: true
   loop: "{{ nginx_multisite_sites | dict2items }}"
   loop_control:
-    loop_var: item_site
+    loop_var: item_nginx_site
 
-# FIX (ordering): Enable and start nginx AFTER document roots and static files
-# are in place so nginx never starts pointing at non-existent document roots.
 - name: Enable and start nginx service
   ansible.builtin.service:
     name: nginx
-    state: started
     enabled: true
+    state: started

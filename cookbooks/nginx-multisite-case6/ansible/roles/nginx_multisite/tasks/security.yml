@@ -1,0 +1,150 @@
+---
+- name: Install security packages
+  ansible.builtin.package:
+    name:
+      - fail2ban
+      - ufw
+    state: present
+
+- name: Deploy fail2ban jail configuration
+  ansible.builtin.template:
+    src: fail2ban.jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    backup: true
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban service
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+- name: Set UFW default policy to deny
+  ansible.builtin.command:
+    cmd: ufw --force default deny
+  changed_when: "'Default incoming policy changed' in nginx_multisite_ufw_default.stdout"
+  failed_when: nginx_multisite_ufw_default.rc != 0
+  register: nginx_multisite_ufw_default
+
+- name: Allow SSH through UFW
+  ansible.builtin.command:
+    cmd: ufw allow ssh
+  changed_when: "'Rules updated' in nginx_multisite_ufw_ssh.stdout"
+  failed_when: nginx_multisite_ufw_ssh.rc != 0
+  register: nginx_multisite_ufw_ssh
+
+- name: Allow HTTP through UFW
+  ansible.builtin.command:
+    cmd: ufw allow http
+  changed_when: "'Rules updated' in nginx_multisite_ufw_http.stdout"
+  failed_when: nginx_multisite_ufw_http.rc != 0
+  register: nginx_multisite_ufw_http
+
+- name: Allow HTTPS through UFW
+  ansible.builtin.command:
+    cmd: ufw allow https
+  changed_when: "'Rules updated' in nginx_multisite_ufw_https.stdout"
+  failed_when: nginx_multisite_ufw_https.rc != 0
+  register: nginx_multisite_ufw_https
+
+- name: Enable UFW
+  ansible.builtin.command:
+    cmd: ufw --force enable
+  changed_when: "'Firewall is active and enabled' in nginx_multisite_ufw_enable.stdout"
+  failed_when: nginx_multisite_ufw_enable.rc != 0
+  register: nginx_multisite_ufw_enable
+
+- name: Fetch OAuth access token # noqa: R105 - POST to internal OAuth endpoint defined in role vars # noqa: L039 - client_secret injected by AAP as a role variable
+  ansible.builtin.uri:
+    url: "{{ nginx_multisite_auth_url }}"
+    method: POST
+    body_format: json
+    body:
+      client_id: "{{ nginx_multisite_client_id }}"
+      client_secret: "{{ client_secret }}"
+    return_content: true
+    status_code: 200
+  register: nginx_multisite_oauth_token_response
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Store OAuth access token as fact # noqa: M005 - registered var nginx_multisite_oauth_token_response used to extract token; trusted internal OAuth response
+  ansible.builtin.set_fact:
+    nginx_multisite_access_token: "{{ nginx_multisite_oauth_token_response.json.access_token }}"
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Fetch and parse token from API endpoint
+  ansible.builtin.uri:
+    url: "{{ nginx_multisite_token_url }}"
+    method: GET
+    return_content: true
+  register: nginx_multisite_token_response
+  no_log: "{{ nginx_multisite_secure_logging }}"
+# NOTE: The regex pattern 'pattern1:(.+)' below is a placeholder from the original Chef cookbook.
+# The actual pattern and endpoint semantics are undocumented. Consult the team that owns
+# https://api.example.com/token_endpoint for the real response format before using this task.
+
+- name: Parse token from API response # noqa: M005 - registered var nginx_multisite_token_response used to extract token; trusted internal API response
+  ansible.builtin.set_fact:
+    nginx_multisite_extracted_token: "{{ nginx_multisite_token_response.content | regex_search('pattern1:(.+)', '\\1') | first }}"
+  no_log: "{{ nginx_multisite_secure_logging }}"
+
+- name: Set app_mode in company app config # noqa: L026 - company_app_conf is a custom internal module with no FQCN; no collection available
+  company_app_conf:
+    path: "{{ nginx_multisite_company_app_conf }}"
+    entry: app_mode
+    value: production
+    state: present
+
+- name: Set health_port in company app config # noqa: L026 - company_app_conf is a custom internal module with no FQCN; no collection available
+  company_app_conf:
+    path: "{{ nginx_multisite_company_app_conf }}"
+    entry: health_port
+    value: "8080"
+    state: present
+# NOTE: The 'secret_setting' Chef custom resource (resources/secret_setting.rb) retrieves
+# 'service_api_key' from the internal Company Secrets Platform via the proprietary
+# 'company_internal_lib' Ruby gem (CompanyInternal::SettingsStore). This resource CANNOT be
+# safely converted without access to the internal platform's Ansible equivalent.
+# The 'service_api_key' credential is now injected by AAP as the variable {{ service_api_key }}.
+# An automation developer must implement the downstream usage of this key manually.
+
+- name: Deploy sysctl security configuration
+  ansible.builtin.template:
+    src: sysctl-security.conf.j2
+    dest: /etc/sysctl.d/99-security.conf
+    mode: "0644"
+    backup: true
+  notify: Reload sysctl security settings
+
+- name: Flush handlers to apply sysctl settings immediately if changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Check whether sshd_config exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config
+  register: nginx_multisite_sshd_config_stat
+
+- name: Disable root SSH login # noqa: L068 - lineinfile is appropriate for targeted sshd_config line edits without owning the full file # noqa: L021 - lineinfile does not support mode parameter # noqa: L039 - nginx_multisite_sshd_config_stat registered by prior stat task
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?\s*PermitRootLogin
+    line: PermitRootLogin no
+    backup: true
+    create: false
+  when:
+    - nginx_multisite_security_ssh_disable_root | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
+  notify: Restart ssh
+
+- name: Disable password authentication # noqa: L068 - lineinfile is appropriate for targeted sshd_config line edits without owning the full file # noqa: L021 - lineinfile does not support mode parameter # noqa: L039 - nginx_multisite_sshd_config_stat registered by prior stat task
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: ^#?\s*PasswordAuthentication
+    line: PasswordAuthentication no
+    backup: true
+    create: false
+  when:
+    - not nginx_multisite_security_ssh_password_auth | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
+  notify: Restart ssh

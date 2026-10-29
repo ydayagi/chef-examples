@@ -1,0 +1,30 @@
+---
+galaxy_info:
+  role_name: nginx_multisite
+  namespace: x2a
+  author: Chef Example
+  description: Configures nginx with multiple SSL-enabled virtual hosts, UFW firewall, fail2ban intrusion prevention, and kernel sysctl security hardening
+  license: Apache-2.0
+  min_ansible_version: 2.14.0
+  platforms:
+    - name: Ubuntu
+      versions:
+        - bionic
+        - focal
+        - jammy
+    - name: EL
+      versions:
+        - "7"
+        - "8"
+        - "9"
+  galaxy_tags:
+    - nginx
+    - webserver
+    - ssl
+    - tls
+    - multisite
+    - fail2ban
+    - ufw
+    - firewall
+    - security
+    - hardening

@@ -1,7 +1,5 @@
 ---
 # nginx_multisite role defaults
-# nginx_multisite_secure_logging: controls no_log for tasks handling secrets
-nginx_multisite_secure_logging: true
 # Sites configuration
 nginx_multisite_sites:
   test.cluster.local:
@@ -13,15 +11,21 @@ nginx_multisite_sites:
   status.cluster.local:
     document_root: /opt/server/status
     ssl_enabled: true
-# SSL paths
+# SSL certificate paths
 nginx_multisite_ssl_certificate_path: /etc/ssl/certs
 nginx_multisite_ssl_private_key_path: /etc/ssl/private
-# Security settings
+# Security: fail2ban
 nginx_multisite_fail2ban_enabled: true
+# Security: UFW firewall
 nginx_multisite_ufw_enabled: true
+# Security: SSH hardening
 nginx_multisite_ssh_disable_root: true
 nginx_multisite_ssh_password_auth: false
-# OAuth token fetch settings (non-secret)
-nginx_multisite_auth_url: "{{ auth_url }}"
-nginx_multisite_client_id: "{{ client_id }}"
-nginx_multisite_token_url: "{{ token_url }}"
+# OAuth token endpoint (non-secret)
+nginx_multisite_oauth_auth_url: "{{ oauth_token_url }}"
+nginx_multisite_oauth_client_id: "{{ oauth_client_id }}"
+# API token endpoint (non-secret)
+nginx_multisite_api_token_url: "{{ api_token_url }}"
+nginx_multisite_api_token_parse_pattern: "{{ api_token_parse_pattern }}"
+# Secure logging toggle — set to false only for debugging
+nginx_multisite_secure_logging: true
