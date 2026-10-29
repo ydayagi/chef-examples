@@ -1,0 +1,147 @@
+---
+argument_specs:
+  main:
+    short_description: Configure nginx multi-site with SSL, UFW, fail2ban, and sysctl hardening
+    description:
+      - Installs and configures nginx to host multiple SSL-enabled virtual hosts.
+      - Hardens the host with UFW firewall rules, fail2ban intrusion prevention, and kernel-level sysctl security parameters.
+      - Generates self-signed TLS certificates per site using a passphrase injected by AAP credentials.
+      - Fetches an OAuth access token and a parsed API token for downstream use.
+      - Manages entries in a proprietary CompanyApp configuration file format.
+    options:
+      nginx_multisite_sites:
+        type: dict
+        required: false
+        default:
+          test.cluster.local:
+            document_root: /opt/server/test
+            ssl_enabled: true
+          ci.cluster.local:
+            document_root: /opt/server/ci
+            ssl_enabled: true
+          status.cluster.local:
+            document_root: /opt/server/status
+            ssl_enabled: true
+        description: >-
+          Dictionary of nginx virtual host definitions. Each key is the server
+          name (FQDN) and the value is a dict with document_root (str) and
+          ssl_enabled (bool).
+      nginx_multisite_ssl_certificate_path:
+        type: str
+        required: false
+        default: /etc/ssl/certs
+        description: Directory where SSL certificates (.crt files) are stored.
+      nginx_multisite_ssl_private_key_path:
+        type: str
+        required: false
+        default: /etc/ssl/private
+        description: Directory where SSL private keys (.key files) are stored.
+      nginx_multisite_security_fail2ban_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to install and enable fail2ban intrusion prevention.
+      nginx_multisite_security_ufw_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether to configure UFW firewall rules.
+      nginx_multisite_security_ssh_disable_root:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          When true, sets PermitRootLogin no in /etc/ssh/sshd_config.
+      nginx_multisite_security_ssh_password_auth:
+        type: bool
+        required: false
+        default: false
+        description: >-
+          When false, sets PasswordAuthentication no in /etc/ssh/sshd_config.
+      nginx_multisite_auth_url:
+        type: str
+        required: false
+        default: "{{ auth_url }}"
+        description: >-
+          OAuth token endpoint URL. Defaults to the auth_url AAP credential variable.
+      nginx_multisite_client_id:
+        type: str
+        required: false
+        default: "{{ client_id }}"
+        description: >-
+          OAuth client ID. Defaults to the client_id AAP credential variable.
+      nginx_multisite_token_url:
+        type: str
+        required: false
+        default: "{{ token_url }}"
+        description: >-
+          API token endpoint URL for fetch-and-parse. Defaults to the token_url
+          AAP credential variable.
+      nginx_multisite_platform_scope:
+        type: str
+        required: false
+        default: "{{ platform_scope }}"
+        description: >-
+          Scope identifier for the internal secrets platform.
+          Defaults to the platform_scope AAP credential variable.
+      nginx_multisite_company_app_conf:
+        type: str
+        required: false
+        default: /etc/company/app.conf
+        description: Path to the proprietary CompanyApp configuration file.
+      nginx_multisite_secure_logging:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          When true, suppresses task output for tasks that handle secrets
+          (ssl_passphrase, client_secret, extracted_token, service_api_key).
+          Set to false only for debugging.
+      ssl_passphrase:
+        type: str
+        required: true
+        description: >-
+          Passphrase used when generating self-signed SSL certificates with openssl.
+          Injected at runtime by the AAP credential type. Sensitive.
+      client_secret:
+        type: str
+        required: true
+        description: >-
+          OAuth client secret for the token endpoint POST request.
+          Injected at runtime by the AAP credential type. Sensitive.
+      service_api_key:
+        type: str
+        required: true
+        description: >-
+          Service API key retrieved from the internal Company Secrets Platform.
+          Injected at runtime by the AAP credential type. Sensitive.
+      extracted_token:
+        type: str
+        required: true
+        description: >-
+          Pre-parsed token value from the API endpoint.
+          Injected at runtime by the AAP credential type. Sensitive.
+      conjur_appliance_url:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur appliance URL.
+          Injected at runtime by the AAP credential type.
+      conjur_account:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur account name.
+          Injected at runtime by the AAP credential type.
+      conjur_variable_path:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur variable path for the SSL passphrase.
+          Injected at runtime by the AAP credential type.
+      conjur_api_token:
+        type: str
+        required: true
+        description: >-
+          CyberArk Conjur API token for authentication.
+          Injected at runtime by the AAP credential type. Sensitive.

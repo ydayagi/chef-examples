@@ -1,0 +1,14 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": "/",
+    "description": "Installs and configures Nginx as a multi-virtual-host SSL web server serving three internal subdomains, with host hardening via fail2ban, UFW firewall rules, sysctl kernel parameters, and SSH daemon hardening. Integrates with CyberArk Conjur for SSL passphrase retrieval and fetches OAuth2 tokens via custom resources.",
+    "technology": "Chef"
+  },
+  {
+    "name": "nginx_multisite",
+    "path": "ansible/roles/nginx_multisite",
+    "description": "Ansible equivalent of the Chef nginx-multisite cookbook \u2014 installs and configures Nginx for three SSL-enabled virtual hosts, hardens the host, generates self-signed TLS certificates, and fetches OAuth2 tokens. All secrets are injected at runtime via Ansible Automation Platform custom credential types.",
+    "technology": "Ansible"
+  }
+]

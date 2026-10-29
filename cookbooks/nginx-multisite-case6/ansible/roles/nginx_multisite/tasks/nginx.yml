@@ -1,0 +1,58 @@
+---
+- name: Install nginx
+  ansible.builtin.package:
+    name: nginx
+    state: present
+
+- name: Deploy nginx main configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    mode: "0644"
+    backup: true
+  notify: Reload nginx
+
+- name: Deploy nginx security configuration
+  ansible.builtin.template:
+    src: security.conf.j2
+    dest: /etc/nginx/conf.d/security.conf
+    mode: "0644"
+    backup: true
+  notify: Reload nginx
+
+- name: Enable and start nginx service
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Create parent directory for site document roots
+  ansible.builtin.file:
+    path: /opt/server
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create site document root directories
+  ansible.builtin.file:
+    path: "{{ item_site['value']['document_root'] }}" # noqa: R114 - path from role-defined sites dict, not user input
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+  loop: "{{ nginx_multisite_sites | dict2items }}"
+  loop_control:
+    loop_var: item_site
+
+- name: Deploy site index.html files
+  ansible.builtin.copy:
+    src: "{{ item_site['key'].split('.')[0] }}/index.html" # noqa: L017 - dynamic role-relative path constructed from trusted sites dict key
+    dest: "{{ item_site['value']['document_root'] }}/index.html" # noqa: R114 - path from role-defined sites dict, not user input
+    owner: www-data
+    group: www-data
+    mode: "0644"
+    backup: true
+  loop: "{{ nginx_multisite_sites | dict2items }}"
+  loop_control:
+    loop_var: item_site

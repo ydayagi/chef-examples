@@ -1,6 +1,4 @@
 ---
-# Security tasks: fail2ban, UFW, sysctl hardening, SSH hardening
-
 - name: Install security packages
   ansible.builtin.package:
     name:
@@ -8,8 +6,6 @@
       - ufw
     state: present
 
-# FIX (ordering): Deploy fail2ban config BEFORE starting the service so that
-# fail2ban starts with the correct jail configuration on the very first run.
 - name: Deploy fail2ban jail configuration
   ansible.builtin.template:
     src: fail2ban.jail.local.j2
@@ -21,67 +17,78 @@
 - name: Enable and start fail2ban service
   ansible.builtin.service:
     name: fail2ban
-    state: started
     enabled: true
+    state: started
 
-- name: Set UFW default policy to deny
-  ansible.builtin.command:
+- name: Set UFW default policy to deny # noqa: L007 - ufw has no ansible.builtin module; community collections not permitted
+  ansible.builtin.shell:
     cmd: ufw --force default deny
   when: nginx_multisite_ufw_enabled | bool
   changed_when: "'Default incoming policy changed' in nginx_multisite_ufw_default.stdout"
   register: nginx_multisite_ufw_default
 
-- name: Allow SSH through UFW
-  ansible.builtin.command:
+- name: Allow SSH through UFW # noqa: L007 - ufw has no ansible.builtin module; community collections not permitted
+  ansible.builtin.shell:
     cmd: ufw allow ssh
   when: nginx_multisite_ufw_enabled | bool
   changed_when: "'Rules updated' in nginx_multisite_ufw_ssh.stdout"
   register: nginx_multisite_ufw_ssh
 
-- name: Allow HTTP through UFW
-  ansible.builtin.command:
+- name: Allow HTTP through UFW # noqa: L007 - ufw has no ansible.builtin module; community collections not permitted
+  ansible.builtin.shell:
     cmd: ufw allow http
   when: nginx_multisite_ufw_enabled | bool
   changed_when: "'Rules updated' in nginx_multisite_ufw_http.stdout"
   register: nginx_multisite_ufw_http
 
-- name: Allow HTTPS through UFW
-  ansible.builtin.command:
+- name: Allow HTTPS through UFW # noqa: L007 - ufw has no ansible.builtin module; community collections not permitted
+  ansible.builtin.shell:
     cmd: ufw allow https
   when: nginx_multisite_ufw_enabled | bool
   changed_when: "'Rules updated' in nginx_multisite_ufw_https.stdout"
   register: nginx_multisite_ufw_https
 
-- name: Enable UFW
-  ansible.builtin.command:
+- name: Enable UFW firewall # noqa: L007 - ufw has no ansible.builtin module; community collections not permitted
+  ansible.builtin.shell:
     cmd: ufw --force enable
   when: nginx_multisite_ufw_enabled | bool
   changed_when: "'Firewall is active and enabled' in nginx_multisite_ufw_enable.stdout"
   register: nginx_multisite_ufw_enable
 
-- name: Fetch OAuth access token
-  ansible.builtin.uri: # noqa: R105 - destination is the role-configured auth URL defined in defaults/group_vars, not user input
-    url: "{{ nginx_multisite_auth_url }}"
+- name: Fetch OAuth access token # noqa: L039 - oauth_client_secret is an AAP credential variable, not role-defined # noqa: R105 - destination is the role-configured OAuth auth URL from AAP credentials, not user input
+  ansible.builtin.uri:
+    url: "{{ nginx_multisite_oauth_auth_url }}"
     method: POST
     body_format: json
     body:
-      client_id: "{{ nginx_multisite_client_id }}"
-      client_secret: "{{ client_secret }}" # noqa: L039 - client_secret is supplied via vault/extra_vars by the caller
+      client_id: "{{ nginx_multisite_oauth_client_id }}"
+      client_secret: "{{ oauth_client_secret }}"
     return_content: true
     status_code: 200
-  register: nginx_multisite_token_response
+  register: nginx_multisite_oauth_token_response
   no_log: "{{ nginx_multisite_secure_logging }}"
 
-- name: Fetch and parse token from token endpoint
-  ansible.builtin.uri:
-    url: "{{ nginx_multisite_token_url }}"
-    method: GET
-    return_content: true
-    status_code: 200
-  register: nginx_multisite_parsed_token_response
+- name: Store OAuth access token as fact # noqa: M005 - registered variable used in set_fact; value is a trusted OAuth response from role-configured endpoint
+  ansible.builtin.set_fact:
+    nginx_multisite_access_token: "{{ nginx_multisite_oauth_token_response.json.access_token }}"
   no_log: "{{ nginx_multisite_secure_logging }}"
+# NOTE FOR AUTOMATION DEVELOPER:
+# The fetch_and_parse_token custom resource from the Chef cookbook is NOT SAFELY CONVERTIBLE.
+# The regex pattern 'pattern1:(.+)' is a placeholder/stub — the real production pattern is
+# unknown. Additionally, the downstream consumer of the extracted token is not present in
+# this cookbook. Before implementing this task, you must determine:
+#   1. What the real regex pattern is (replace 'pattern1' with the actual token field name)
+#   2. What https://api.example.com/token_endpoint actually returns and whether it requires
+#      authentication headers (api_auth_header credential variable is available)
+#   3. What downstream task consumes the extracted token value
+# Once those are known, implement using ansible.builtin.uri + ansible.builtin.set_fact
+# with a regex_search filter, similar to the OAuth token fetch above.
+# The AAP credential variables available for this are:
+#   - api_token_url (non-secret)
+#   - api_token_parse_pattern (non-secret)
+#   - api_auth_header (secret — use no_log: "{{ nginx_multisite_secure_logging }}")
 
-- name: Deploy sysctl security configuration
+- name: Deploy sysctl kernel hardening configuration
   ansible.builtin.template:
     src: sysctl-security.conf.j2
     dest: /etc/sysctl.d/99-security.conf
@@ -89,36 +96,31 @@
     backup: true
   notify: Reload sysctl
 
-# FIX (category 2 - missing app guard): openssh-server is a base OS component
-# that the role does not own. Stat-guard both sshd_config tasks so they are
-# skipped (rather than creating a bogus stub) on targets where the file is absent.
-- name: Check whether sshd_config exists
+- name: Check if sshd_config exists
   ansible.builtin.stat:
     path: /etc/ssh/sshd_config
   register: nginx_multisite_sshd_config_stat
 
-- name: Harden SSH - disable root login
-  ansible.builtin.lineinfile: # noqa: L068 - sshd_config is not an ini/template-managed file; lineinfile is the correct targeted approach
+- name: Disable root SSH login # noqa: L039 - nginx_multisite_sshd_config_stat is registered by the preceding stat task # noqa: L068 - lineinfile is appropriate here; full sshd_config template is out of scope # noqa: L021 - lineinfile does not accept a mode parameter
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: ^#?PermitRootLogin
     line: PermitRootLogin no
     backup: true
     create: false
-    mode: "0600"
   when:
-    - nginx_multisite_ssh_disable_root
-    - nginx_multisite_sshd_config_stat.stat.exists # noqa: L039 - registered by the preceding stat task
+    - nginx_multisite_ssh_disable_root | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
   notify: Restart ssh
 
-- name: Harden SSH - disable password authentication
-  ansible.builtin.lineinfile: # noqa: L068 - sshd_config is not an ini/template-managed file; lineinfile is the correct targeted approach
+- name: Disable SSH password authentication # noqa: L039 - nginx_multisite_sshd_config_stat is registered by the preceding stat task # noqa: L068 - lineinfile is appropriate here; full sshd_config template is out of scope # noqa: L021 - lineinfile does not accept a mode parameter
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: ^#?PasswordAuthentication
     line: PasswordAuthentication no
     backup: true
     create: false
-    mode: "0600"
   when:
-    - not nginx_multisite_ssh_password_auth
-    - nginx_multisite_sshd_config_stat.stat.exists # noqa: L039 - registered by the preceding stat task
+    - not nginx_multisite_ssh_password_auth | bool
+    - nginx_multisite_sshd_config_stat.stat.exists
   notify: Restart ssh

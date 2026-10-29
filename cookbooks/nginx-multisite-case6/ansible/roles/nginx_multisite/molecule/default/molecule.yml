@@ -1,0 +1,22 @@
+---
+driver:
+  name: default
+
+platforms:
+  - name: molecule-test-instance
+    groups:
+      - all
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "${MOLECULE_PROJECT_DIRECTORY}/../"
+  inventory:
+    hosts:
+      all:
+        hosts:
+          molecule-test-instance:
+            ansible_connection: local
+
+verifier:
+  name: ansible

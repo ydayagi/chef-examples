@@ -1,20 +1,13 @@
 ---
 argument_specs:
   main:
-    short_description: Install and configure nginx as a multi-site SSL-enabled web server
+    short_description: Install and configure nginx as a multi-site SSL web server with host hardening
     description:
-      - Installs and configures nginx to host multiple SSL-enabled virtual hosts.
-      - Hardens the host with fail2ban, UFW firewall rules, and kernel sysctl security parameters.
-      - Generates self-signed TLS certificates for each configured site.
-      - Enforces SSH hardening via sshd_config modifications.
+      - Installs and configures nginx to serve multiple SSL-enabled virtual hosts.
+      - Hardens the host with fail2ban, UFW firewall, sysctl kernel parameters, and SSH daemon settings.
+      - Generates self-signed TLS certificates for each configured virtual host.
+      - Fetches an OAuth access token from a configurable endpoint.
     options:
-      nginx_multisite_secure_logging:
-        type: bool
-        required: false
-        default: true
-        description: >-
-          Controls no_log for tasks that handle secret credentials (ssl_passphrase,
-          client_secret, extracted_token). Set to false only for debugging.
       nginx_multisite_sites:
         type: dict
         required: false
@@ -29,8 +22,8 @@ argument_specs:
             document_root: /opt/server/status
             ssl_enabled: true
         description: >-
-          Dictionary of virtual host sites to configure. Each key is the server_name
-          (FQDN) and the value is a dict with document_root and ssl_enabled keys.
+          Dictionary of virtual host configurations keyed by server name.
+          Each entry must have document_root (str) and ssl_enabled (bool).
       nginx_multisite_ssl_certificate_path:
         type: str
         required: false
@@ -50,7 +43,7 @@ argument_specs:
         type: bool
         required: false
         default: true
-        description: Whether to configure UFW firewall rules (deny default, allow SSH/HTTP/HTTPS).
+        description: Whether to configure UFW firewall rules (deny-by-default, allow 22/80/443).
       nginx_multisite_ssh_disable_root:
         type: bool
         required: false
@@ -62,104 +55,89 @@ argument_specs:
         default: false
         description: >-
           Whether to allow SSH password authentication. When false (default),
-          PasswordAuthentication no is enforced in /etc/ssh/sshd_config.
-      nginx_multisite_auth_url:
+          PasswordAuthentication no is set in /etc/ssh/sshd_config.
+      nginx_multisite_oauth_auth_url:
         type: str
         required: false
-        default: "{{ auth_url }}"
-        description: OAuth2 token endpoint URL for the fetch_token operation.
-      nginx_multisite_client_id:
+        default: "{{ oauth_token_url }}"
+        description: OAuth2 token endpoint URL for fetching an access token.
+      nginx_multisite_oauth_client_id:
         type: str
         required: false
-        default: "{{ client_id }}"
-        description: OAuth2 client ID used when fetching the access token.
-      nginx_multisite_token_url:
+        default: "{{ oauth_client_id }}"
+        description: OAuth2 client ID used when requesting an access token.
+      nginx_multisite_api_token_url:
         type: str
         required: false
-        default: "{{ token_url }}"
-        description: URL for the token endpoint used by fetch_and_parse_token.
-      # AAP credential-injected variables (required, no defaults)
+        default: "{{ api_token_url }}"
+        description: API token endpoint URL (see fetch_and_parse_token note in security.yml).
+      nginx_multisite_api_token_parse_pattern:
+        type: str
+        required: false
+        default: "{{ api_token_parse_pattern }}"
+        description: Regex pattern used to extract the token from the API response body.
+      nginx_multisite_secure_logging:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Controls no_log on tasks that handle secret credentials (ssl_passphrase,
+          oauth_client_secret, api_auth_header). Set to false only for debugging.
       ssl_passphrase:
         type: str
         required: true
         description: >-
-          Passphrase for the RSA private key used when generating self-signed TLS
-          certificates. Injected at runtime by the AAP CyberArk Conjur credential type.
-      client_secret:
+          Passphrase used when generating self-signed TLS private keys with openssl.
+          Injected at runtime by the AAP credential type — do not set in playbooks.
+      oauth_client_secret:
         type: str
         required: true
         description: >-
-          OAuth2 client secret used when fetching the access token from auth_url.
-          Injected at runtime by the AAP credential type.
-      extracted_token:
+          OAuth2 client secret for the token endpoint POST request.
+          Injected at runtime by the AAP credential type — do not set in playbooks.
+      oauth_token_url:
         type: str
         required: true
         description: >-
-          Token value extracted from the token_url endpoint response.
-          Injected at runtime by the AAP credential type.
-      conjur_api_key:
+          OAuth2 token endpoint URL injected by the AAP credential type.
+      oauth_client_id:
         type: str
         required: true
         description: >-
-          CyberArk Conjur API key for authenticating to the Conjur appliance.
-          Injected at runtime by the AAP CyberArk Conjur credential type.
-      host_api_key:
+          OAuth2 client ID injected by the AAP credential type.
+      api_token_url:
         type: str
         required: true
         description: >-
-          CyberArk Conjur host API key for host identity authentication.
-          Injected at runtime by the AAP CyberArk Conjur credential type.
+          API token endpoint URL injected by the AAP credential type.
+      api_token_parse_pattern:
+        type: str
+        required: true
+        description: >-
+          Regex pattern for parsing the API token response, injected by the AAP credential type.
+      api_auth_header:
+        type: str
+        required: true
+        description: >-
+          Authentication header value for the API token endpoint.
+          Injected at runtime by the AAP credential type — do not set in playbooks.
       conjur_appliance_url:
         type: str
         required: true
         description: >-
-          URL of the CyberArk Conjur appliance.
-          Injected at runtime by the AAP CyberArk Conjur credential type.
+          CyberArk Conjur appliance URL injected by the AAP credential type.
       conjur_account:
         type: str
         required: true
         description: >-
-          CyberArk Conjur account name.
-          Injected at runtime by the AAP CyberArk Conjur credential type.
+          CyberArk Conjur account name injected by the AAP credential type.
       conjur_variable_path:
         type: str
         required: true
         description: >-
-          Path to the variable in CyberArk Conjur to retrieve.
-          Injected at runtime by the AAP CyberArk Conjur credential type.
-      auth_url:
+          CyberArk Conjur variable path injected by the AAP credential type.
+      conjur_api_key:
         type: str
         required: true
         description: >-
-          Raw OAuth2 token endpoint URL injected by the AAP credential type.
-          Consumed by the nginx_multisite_auth_url default.
-      client_id:
-        type: str
-        required: true
-        description: >-
-          Raw OAuth2 client ID injected by the AAP credential type.
-          Consumed by the nginx_multisite_client_id default.
-      token_url:
-        type: str
-        required: true
-        description: >-
-          Raw token URL injected by the AAP credential type.
-          Consumed by the nginx_multisite_token_url default.
-      appliance_url:
-        type: str
-        required: true
-        description: >-
-          Conjur appliance URL (alternate form) injected by the AAP credential type.
-          Validated by validate_credentials.yml.
-      account:
-        type: str
-        required: true
-        description: >-
-          Conjur account (alternate form) injected by the AAP credential type.
-          Validated by validate_credentials.yml.
-      host_identity:
-        type: str
-        required: true
-        description: >-
-          Conjur host identity injected by the AAP credential type.
-          Validated by validate_credentials.yml.
+          CyberArk Conjur API key injected by the AAP credential type — do not set in playbooks.

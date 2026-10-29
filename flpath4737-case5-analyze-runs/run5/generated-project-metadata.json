@@ -1,0 +1,14 @@
+[
+  {
+    "name": "nginx-multisite",
+    "path": "/",
+    "description": "Configures Nginx as a multi-site SSL-enabled web server serving three virtual hosts with self-signed TLS certificates, host hardening (fail2ban, UFW, sysctl, SSH), and runtime secret retrieval via CyberArk Conjur and OAuth2.",
+    "technology": "Chef"
+  },
+  {
+    "name": "nginx_multisite",
+    "path": "ansible/roles/nginx_multisite",
+    "description": "Ansible role equivalent of the Chef nginx-multisite cookbook, managing Nginx multi-site SSL configuration, host hardening, and credential injection via AAP custom credential types.",
+    "technology": "Ansible"
+  }
+]

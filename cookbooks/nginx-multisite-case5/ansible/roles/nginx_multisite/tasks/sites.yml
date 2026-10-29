@@ -1,6 +1,4 @@
 ---
-# nginx virtual host site configuration tasks
-
 - name: Deploy nginx virtual host configurations
   ansible.builtin.template:
     src: site.conf.j2
@@ -18,8 +16,8 @@
     cert_file: "{{ nginx_multisite_ssl_certificate_path }}/{{ item_site['key'] }}.crt"
     key_file: "{{ nginx_multisite_ssl_private_key_path }}/{{ item_site['key'] }}.key"
 
-- name: Enable nginx virtual host sites (symlink to sites-enabled)
-  ansible.builtin.file: # noqa: L021 - state: link; mode is ignored by the OS for symlinks
+- name: Enable nginx virtual host sites (create symlinks) # noqa: L021 - symlinks do not use mode; state=link ignores mode parameter
+  ansible.builtin.file:
     src: /etc/nginx/sites-available/{{ item_site['key'] }}
     dest: /etc/nginx/sites-enabled/{{ item_site['key'] }} # noqa: R114 - path from role-defined sites dict, not user input
     state: link
@@ -28,8 +26,8 @@
     loop_var: item_site
   notify: Reload nginx
 
-- name: Remove default nginx site
-  ansible.builtin.file: # noqa: L021 - state: absent; mode is not applicable for file deletion
+- name: Remove default nginx placeholder site # noqa: L021 - state=absent removes the file; mode is not applicable
+  ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
   notify: Reload nginx
