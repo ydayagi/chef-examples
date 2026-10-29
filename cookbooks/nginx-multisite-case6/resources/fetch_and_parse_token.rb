@@ -11,8 +11,8 @@ action :fetch_and_parse do
   uri = URI.parse(new_resource.token_url)
   response = Net::HTTP.get_response(uri)
 
-  # Matches string pattern 'pattern1:pattern2' and captures pattern2
-  if response.body =~ /pattern1:(.+)/
+  # Matches a line like 'X-Header:value' and captures the value
+  if response.body =~ /X-Header:(.+)/
     parsed_value = Regexp.last_match(1).strip
     new_resource.extracted_token = parsed_value
     node.run_state['extracted_token'] = parsed_value
