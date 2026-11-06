@@ -76,6 +76,7 @@ if node['security']['ssh']['disable_root']
   ada_ada '/etc/ssh/sshd_config' do
     line 'PermitRootLogin no'
     match '^#\?PermitRootLogin'
+    not_if "grep -q '^PermitRootLogin no' /etc/ssh/sshd_config"
     notifies :restart, 'service[ssh]', :delayed
   end
 end
@@ -84,6 +85,7 @@ if node['security']['ssh']['password_auth'] == false
   ada_ada '/etc/ssh/sshd_config' do
     line 'PasswordAuthentication no'
     match '^#\?PasswordAuthentication'
+    not_if "grep -q '^PasswordAuthentication no' /etc/ssh/sshd_config"
     notifies :restart, 'service[ssh]', :delayed
   end
 end
