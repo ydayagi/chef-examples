@@ -47,16 +47,6 @@ fetch_and_parse_token 'get parsed token' do
   token_url 'https://api.example.com/token_endpoint'
 end
 
-my_format '/etc/company/app.conf' do
-  entry 'app_mode'
-  value 'production'
-end
-
-my_format '/etc/company/app.conf' do
-  entry 'health_port'
-  value '8080'
-end
-
 secret_setting 'service_api_key' do
   scope 'nginx'
 end
